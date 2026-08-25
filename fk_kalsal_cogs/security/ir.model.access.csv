@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_cogs_sales_analysis_all,cogs.sales.analysis.all,model_cogs_sales_analysis,base.group_user,1,1,1,1
+access_cogs_fg_line_all,cogs.fg.line.all,model_cogs_fg_line,base.group_user,1,1,1,1
+access_cogs_rm_line_all,cogs.rm.line.all,model_cogs_rm_line,base.group_user,1,1,1,1

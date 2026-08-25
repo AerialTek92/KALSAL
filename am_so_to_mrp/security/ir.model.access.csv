@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_custom_budget,custom.budget,model_custom_budget,base.group_user,1,1,1,1
+access_budget_product_line,budget.product.line,model_budget_product_line,base.group_user,1,1,1,1
+access_budget_summary_line,budget.summary.line,model_budget_summary_line,base.group_user,1,1,1,1
+access_purchase_requisition_form,purchase.requisition.form,model_purchase_requisition_form,base.group_user,1,1,1,1
+access_purchase_requisition_line,purchase.requisition.line,model_purchase_requisition_line,base.group_user,1,1,1,1
+access_quotation_requisition_line,quotation.requisition.line,model_quotation_requisition_line,base.group_user,1,1,1,1

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Hide Bills of Materials from Products dropdown menu -->
+    <record id="mrp.menu_mrp_bom_form_action" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+</odoo>

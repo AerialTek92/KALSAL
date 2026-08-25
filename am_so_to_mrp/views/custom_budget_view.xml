@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tree (List) View -->
+    <record id="view_custom_budget_tree" model="ir.ui.view">
+        <field name="name">custom.budget.tree</field>
+        <field name="model">custom.budget</field>
+        <field name="arch" type="xml">
+            <list string="Forecast Budgets">
+                <field name="name"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-warning="state == 'waiting'"
+                       decoration-success="state == 'approved'"
+                       decoration-danger="state == 'cancel'"
+                />
+                <field name="date_from"/>
+                <field name="date_to"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_custom_budget_form" model="ir.ui.view">
+        <field name="name">custom.budget.form</field>
+        <field name="model">custom.budget</field>
+        <field name="arch" type="xml">
+            <form string="Forecast Budget">
+                <header>
+                    <button name="action_confirm" string="Confirm" type="object" class="oe_highlight"
+                            invisible="state != 'draft'"/>
+                    <button name="action_custom_save" string="Save" type="object" class="oe_highlight"/>
+
+                    <button name="action_approve" string="Approve &amp; Create PR" type="object" class="oe_highlight"
+                            invisible="state != 'waiting'" groups="am_so_to_mrp.group_budget_approver"/>
+                    <button name="action_cancel" string="Cancel" type="object"
+                            invisible="state not in ('draft','waiting')"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,waiting,approved"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_requisition"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-shopping-cart"
+                                invisible="not requisition_id">
+                            <span>Material Requisition</span>
+                        </button>
+                        <button name="action_view_manufacturing_orders"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-wrench"
+                                invisible="mo_count == 0">
+                            <field name="mo_count" widget="statinfo" string="Linked Manufacturings"/>
+                        </button>
+                    </div>
+
+                    <div class="oe_title">
+                        <label for="name" string="Budget Reference"/>
+                        <h1>
+                            <field name="name" placeholder="Budget Reference..."/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Customer Information">
+                            <field name="partner_id" widget="res_partner_many2one"
+                                   context="{'res_partner_search_mode': 'customer'}"/>
+                            <field name="origin" string="Source Document" readonly="True"/>
+                        </group>
+                        <group string="Planning Details">
+                            <label for="date_from" string="Budget Period"/>
+                            <div class="o_row">
+                                <field name="date_from" nolabel="1" class="oe_inline"/>
+                                <i class="fa fa-arrow-right mx-1" aria-label="To" title="To"/>
+                                <field name="date_to" nolabel="1" class="oe_inline"/>
+                            </div>
+                            <field name="user_id" widget="many2one_avatar_user"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Product Forecasting" name="product_lines">
+                            <field name="product_line_ids">
+                                <list editable="bottom">
+                                    <field name="product_id"/>
+<!--                                    <field name="finished_good_id" widget="many2many_tags"/>-->
+                                    <field name="qty" string="Shortness Qty"/>
+                                    <field name="old_rate"/>
+                                    <field name="subtotal" sum="Total Cost"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Finished Good Summary" name="budget_summary">
+                            <field name="budget_line_ids">
+                                <list editable="bottom" create="0">
+                                    <!-- Defining which Finished Good this line is for -->
+                                    <field name="finished_good_id" readonly="1"/>
+                                    <field name="mo_id" string="Reference MO" readonly="1"/>
+                                    <field name="total_budget_amount" sum="Total Order Cost" string="Estimated Cost"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_custom_budget" model="ir.actions.act_window">
+        <field name="name">Forecast Budgets</field>
+        <field name="res_model">custom.budget</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Menu Items (Under Manufacturing) -->
+    <menuitem id="menu_custom_budget_root"
+              name="Forecast Budgets"
+              parent="mrp.menu_mrp_reporting"
+              action="action_custom_budget"
+              sequence="10"/>
+
+</odoo>

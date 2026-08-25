@@ -1,0 +1,120 @@
+<odoo>
+    <!-- First Record: Sale Order Inherit -->
+    <record id="view_sale_order_form_inherit" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook/page[@name='order_lines']/field[@name='order_line']/list/field[@name='price_subtotal']"
+                   position="after">
+                <field name="remark"/>
+            </xpath>
+
+            <xpath expr="//header" position="inside">
+                <button name="action_custom_save" string="Save" type="object" class="oe_highlight"/>
+            </xpath>
+
+
+            <xpath expr="//notebook/page[@name='order_lines']/field[@name='order_line']/list/field[@name='product_template_id']"
+                   position="before">
+                <field name="s_no"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="mrp_production_tree_view_inherit_bulk_budget" model="ir.ui.view">
+        <field name="name">mrp.production.list.inherit.bulk.budget</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_id']" position="after">
+                <field name="x_shortness_summary"
+                       string="Real-time Shortage"
+                       decoration-danger="x_shortness_summary != '✓ All Materials Available'"
+                       decoration-success="x_shortness_summary == '✓ All Materials Available'"
+                       optional="show"/>
+            </xpath>
+
+
+            <!-- In Odoo 19/Master, we MUST use //list instead of //tree -->
+            <xpath expr="//list" position="inside">
+                <header>
+                    <button name="action_generate_bulk_budget"
+                            type="object"
+                            string="Generate Master Budget"
+                            class="btn-primary"/>
+                </header>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Update the Action to enable Split View (List + Form) -->
+    <record id="mrp.mrp_production_action" model="ir.actions.act_window">
+        <field name="view_mode">list,form</field>
+        <field name="context">{'list_view_primary_form': True}</field>
+    </record>
+
+
+    <!-- Combined MRP Production Form Inherit -->
+    <record id="view_mrp_production_form_inherit_combined" model="ir.ui.view">
+        <field name="name">mrp.production.form.inherit.combined</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <!-- The button that triggers your python window action script -->
+                <button name="action_view_sibling_mos"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-wrench"
+                        invisible="not origin">
+                    <!-- Use the computed integer count for the dynamic statinfo dashboard layout -->
+                    <field name="sibling_mo_count" widget="statinfo" string="Related MOs"/>
+                </button>
+            </xpath>
+
+            <!-- 1. Custom Save Button -->
+            <xpath expr="//header" position="inside">
+                <button name="action_custom_save" string="Save" type="object" class="oe_highlight"/>
+            </xpath>
+
+            <!-- 2. Smart Button: Access the Forecast Budget directly -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <field name="x_budget_analytic_id" invisible="1"/>
+                <button name="action_view_analytic_account"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-calculator"
+                        invisible="not x_budget_analytic_id">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Forecast Budget</span>
+                    </div>
+                </button>
+            </xpath>
+
+            <!-- 3. Header Fields: Tracking the PO and Budget Record -->
+            <xpath expr="//field[@name='user_id']" position="after">
+                <field name="purchase_order_id" readonly="1" groups="base.group_no_one"/>
+                <field name="x_budget_analytic_id" readonly="1"/>
+            </xpath>
+
+            <!-- 5. Hide forecast_availability -->
+            <xpath expr="//field[@name='move_raw_ids']/list/field[@name='forecast_availability']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <!-- 6. NEW COLUMN: Show Shortness in the Component Lines -->
+            <xpath expr="//field[@name='move_raw_ids']/list/field[@name='product_uom_qty']" position="after">
+                <field name="x_items_short"
+                       string="Shortness"
+                       decoration-danger="x_items_short > 0"
+                       widget="badge"
+                       readonly="1"
+                       force_save="1"/>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

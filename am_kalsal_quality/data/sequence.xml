@@ -1,0 +1,26 @@
+<odoo>
+    <data noupdate="1">
+        <record id="seq_vehicle_inspection" model="ir.sequence">
+            <field name="name">Vehicle Inspection</field>
+            <field name="code">vehicle.inspection</field>
+            <field name="prefix">INS/%(year)s/</field>
+            <field name="padding">4</field>
+            <field name="company_id" eval="False"/>
+        </record>
+        <record id="seq_kalsal_quality_check" model="ir.sequence">
+            <field name="name">Quality Check</field>
+            <field name="code">kalsal.quality.check</field>
+            <field name="prefix">QC/%(year)s/</field>
+            <field name="padding">4</field>
+            <field name="company_id" eval="False"/>
+        </record>
+
+        <record id="seq_line_clearance" model="ir.sequence">
+            <field name="name">Line Clearance Sequence</field>
+            <field name="code">line.clearance</field>
+            <field name="prefix">LC</field>
+            <field name="padding">5</field>
+            <field name="company_id" eval="False"/>
+        </record>
+    </data>
+</odoo>

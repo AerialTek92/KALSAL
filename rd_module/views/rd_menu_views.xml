@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- R and D Main Menu (Visible to both Users and Approvers) -->
+        <menuitem id="menu_rd_root"
+                  name="R and D"
+                  web_icon="rd_module,static/description/icon.png"
+                  groups="rd_module.group_rnd_user,rd_module.group_rnd_approver"
+                  sequence="50"/>
+
+        <!-- Custom Window Action that forces grouping by Product Template -->
+        <record id="action_rd_bom_grouped" model="ir.actions.act_window">
+            <field name="name">Bills of Materials</field>
+            <field name="res_model">mrp.bom</field>
+            <field name="view_mode">list,form</field>
+            <!-- TARGET FIXED: Points directly to our new custom filter group string key -->
+            <field name="context">{'search_default_group_by_product_template_custom': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Create your first Bill of Materials!
+                </p>
+            </field>
+        </record>
+
+        <!-- Bills of Materials Menu linked to our clean grouped window action -->
+        <menuitem id="menu_rd_bom"
+                  name="Bills of Materials"
+                  parent="menu_rd_root"
+                  action="action_rd_bom_grouped"
+                  groups="rd_module.group_rnd_user,rd_module.group_rnd_approver"
+                  sequence="10"/>
+
+        <!-- Products Menu under R and D -->
+        <menuitem id="menu_rd_products"
+                  name="Products"
+                  parent="menu_rd_root"
+                  action="product.product_template_action"
+                  groups="rd_module.group_rnd_user,rd_module.group_rnd_approver"
+                  sequence="20"/>
+    </data>
+</odoo>

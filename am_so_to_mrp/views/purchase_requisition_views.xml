@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Form View -->
+    <record id="view_purchase_requisition_form" model="ir.ui.view">
+        <field name="name">purchase.requisition.form</field>
+        <field name="model">purchase.requisition.form</field>
+        <field name="priority" eval="16"/>
+        <field name="arch" type="xml">
+            <form string="Purchase Requisition">
+                <header>
+                    <button name="action_confirm" string="Confirm" type="object"
+                            invisible="state != 'draft'" class="oe_highlight"/>
+                    <button name="action_custom_save" string="Save" type="object"
+                            class="oe_highlight"/>
+
+                    <button name="action_approve" string="Approve" type="object"
+                            invisible="state != 'waiting'"
+                            groups="am_so_to_mrp.group_budget_approver"
+                            class="oe_highlight"/>
+
+                    <!-- Unified Button for Quotes Confirmation -->
+                    <button name="action_confirm_quotes" string="Confirm Selected Quotes" type="object"
+                            invisible="state not in ['confirmed','redo']" class="oe_highlight"/>
+
+                    <button name="action_cancel" string="Cancel" type="object"
+                            invisible="state not in ['draft', 'confirmed','redo']"/>
+
+                    <!-- Aligned statusbar with actual states in Python -->
+                    <field name="state" widget="statusbar" statusbar_visible="draft,waiting,confirmed,done"/>
+                </header>
+
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_budget"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-bar-chart"
+                                invisible="not budget_id">
+                            <span>Linked Budget</span>
+                        </button>
+                        <button name="action_view_purchase_orders"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-credit-card"
+                                invisible="po_count == 0">
+                            <field name="po_count" widget="statinfo" string="POs"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>Material Purchase Requisition</h1>
+                    </div>
+                    <group>
+                        <group>
+                            <label for="name" string="Budget Reference"/>
+                            <span>
+                                <field name="name"/>
+                            </span>
+                            <field name="date"/>
+                            <field name="requisition_type"/>
+                            <field name="budget_id"/>
+                        </group>
+                        <group>
+                            <field name="originator_name"/>
+                            <field name="material_used_in"/>
+                            <field name="order_number" readonly="True"/>
+                            <field name="party_name"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Purchases">
+                            <field name="purchase_line_ids">
+                                <list editable="bottom" create="0" edit="0" delete="0">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="product_id"/>
+<!--                                    <field name="finished_good_id" widget="many2many_tags"/>-->
+                                    <field name="quantity_required"/>
+                                    <field name="uom_id"/>
+                                    <field name="third_last_price" readonly="1"/>
+                                    <field name="third_last_vendor_id" readonly="1"/>
+                                    <field name="second_last_price" readonly="1"/>
+                                    <field name="second_last_vendor_id" readonly="1"/>
+                                    <field name="first_last_price" readonly="1"/>
+                                    <field name="first_last_vendor_id" readonly="1"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Quotations">
+                            <field name="quotation_line_ids">
+                                <list editable="bottom" create="state not in ['confirmed']">
+                                    <!-- Load all 3 evaluation fields invisibly into client rows -->
+                                    <field name="is_po_cancelled" column_invisible="True"/>
+                                    <field name="checked_price_1" column_invisible="True"/>
+                                    <field name="checked_price_2" column_invisible="True"/>
+                                    <field name="checked_price_3" column_invisible="True"/>
+
+                                    <!-- Required invisible fields for dynamic domain -->
+                                    <field name="restrict_products" column_invisible="True"/>
+                                    <field name="allowed_product_ids" column_invisible="True"/>
+                                    <!-- Add these right below allowed_product_ids -->
+                                    <field name="base_qty" column_invisible="True"/>
+                                    <field name="source_line_id" column_invisible="True"/>
+                                    <field name="clone_base_qty" column_invisible="True"/>
+
+                                    <field name="sequence" widget="handle"/>
+
+                                    <!-- FIX: Dynamic domain evaluated as a Python expression -->
+                                    <field name="product_id"
+                                           decoration-danger="is_po_cancelled"
+                                           domain="restrict_products and [('id', 'in', allowed_product_ids)] or []"/>
+
+<!--                                    <field name="finished_good_id" widget="many2many_tags"/>-->
+                                    <field name="quantity_required" decoration-danger="is_po_cancelled"/>
+                                    <field name="uom_id" decoration-danger="is_po_cancelled"/>
+
+                                    <!-- Red if price hike is true (remarks empty), green if false -->
+                                    <field name="first_quotation_price" decoration-danger="checked_price_1 == True"
+                                           decoration-success="checked_price_1 == False" force_save="1"/>
+                                    <field name="first_quotation_vendor_id" force_save="1"/>
+
+                                    <field name="second_quotation_price" decoration-danger="checked_price_2 == True"
+                                           decoration-success="checked_price_2 == False" force_save="1"/>
+                                    <field name="second_quotation_vendor_id" force_save="1"/>
+
+                                    <field name="third_quotation_price" decoration-danger="checked_price_3 == True"
+                                           decoration-success="checked_price_3 == False" force_save="1"/>
+                                    <field name="third_quotation_vendor_id" force_save="1"/>
+
+                                    <!-- Added Readonly so the user HAS to use the line buttons -->
+                                    <field name="confirmed_quote_uom_price" readonly="1" force_save="1"/>
+                                    <field name="confirmed_quote_vendor_id" readonly="1" force_save="1"/>
+
+                                    <!-- Selection Buttons -->
+                                    <button name="first_quote" string="1st" type="object"
+                                            class="btn-primary" column_invisible="parent.state == 'confirmed'"/>
+                                    <button name="second_quote" string="2nd" type="object"
+                                            class="btn-primary" column_invisible="parent.state == 'confirmed'"/>
+                                    <button name="third_quote" string="3rd" type="object"
+                                            class="btn-primary" column_invisible="parent.state == 'confirmed'"/>
+
+                                    <!-- Mandatory input if ANY of the three columns experience an unremarked hike -->
+                                    <field name="remarks"/>
+                                    <field name="approval_on"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Inherited PO form View -->
+    <record id="purchase_order_view_form_inherit_smart_btn" model="ir.ui.view">
+        <field name="name">purchase.order.form.inherit.smart.btn</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+
+            <!-- REMOVED global read_only_form from here because it blocks everything completely -->
+
+            <!-- STEP 2: Add your finance buttons inside the Header -->
+            <xpath expr="//header/button[@name='button_confirm']" position="after">
+                <button name="action_custom_lock" string="Lock Order" type="object" class="btn-warning"
+                        invisible="state != 'draft'"/>
+                <button name="action_custom_unlock" string="Unlock Order" type="object" class="btn-secondary"
+                        invisible="state != 'locked'"/>
+            </xpath>
+
+            <!-- Injects the text-only smart button -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_purchase_requisition"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-list"
+                        invisible="not pr_order_id">
+                    <div class="o_field_widget o_stat_info">
+                        <span class="o_stat_text">View Source</span>
+                        <span class="o_stat_text">Requisition</span>
+                    </div>
+                </button>
+            </xpath>
+
+            <!-- 1. HIDE the original payment_term_id from its default location -->
+            <xpath expr="//field[@name='payment_term_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <!-- 2. FOR NON-FINANCE USERS: Place it after partner, strictly readonly always -->
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="payment_term_id"
+                       options="{'no_open': True, 'no_create': True}"
+                       groups="!account.group_account_user"
+                       readonly="1"
+                       force_save="1"/>
+            </xpath>
+
+            <!-- 3. FOR FINANCE USERS: Editable even when 'locked', only read-only on cancel/done -->
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="payment_term_id"
+                       options="{'no_open': True, 'no_create': True}"
+                       groups="account.group_account_user"
+                       readonly="state in ['cancel', 'done']"
+                       force_save="1"/>
+            </xpath>
+
+            <!-- Replaces analytic distribution with Remarks -->
+            <xpath expr="//notebook/page[@name='products']/field[@name='order_line']/list/field[@name='analytic_distribution']"
+                   position="replace">
+                <field name="remarks" placeholder="Remarks from requisition..."/>
+            </xpath>
+            <!-- 1. Add the field invisibly so Odoo's UI can read its value -->
+            <xpath expr="//notebook/page[@name='products']/field[@name='order_line']/list/field[@name='product_id']"
+                   position="after">
+                <field name="qc_failed" column_invisible="1"/>
+            </xpath>
+
+            <!-- 2. Apply the red color to the entire row if it failed -->
+            <xpath expr="//notebook/page[@name='products']/field[@name='order_line']/list" position="attributes">
+                <!-- Note: In modern Odoo, explicitly writing '== True' is safer for list decorations -->
+                <attribute name="decoration-danger">qc_failed == True</attribute>
+            </xpath>
+            <!-- 4. LOCK DOWN THE REST OF THE CORE FIELDS WHEN STATE IS LOCKED -->
+            <!-- This targets the core header fields and the line items layout dynamically -->
+            <xpath expr="//field[@name='partner_id']" position="attributes">
+                <attribute name="readonly">state in ['purchase', 'done', 'cancel', 'locked']</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='picking_type_id']" position="attributes">
+                <attribute name="readonly">state in ['purchase', 'done', 'cancel', 'locked']</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='user_id']" position="attributes">
+                <attribute name="readonly">state in ['purchase', 'done', 'cancel', 'locked']</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='origin']" position="attributes">
+                <attribute name="readonly">state in ['purchase', 'done', 'cancel', 'locked']</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='partner_ref']" position="attributes">
+                <attribute name="readonly">state in ['purchase', 'done', 'cancel', 'locked']</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='date_order']" position="attributes">
+                <attribute name="readonly">state in ['purchase', 'done', 'cancel', 'locked']</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='order_line']" position="attributes">
+                <attribute name="readonly">state in ['purchase', 'done', 'cancel', 'locked']</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- List View -->
+    <record id="view_purchase_requisition_list" model="ir.ui.view">
+        <field name="name">purchase.requisition.list</field>
+        <field name="model">purchase.requisition.form</field>
+        <field name="arch" type="xml">
+            <list string="Purchase Requisitions">
+                <field name="name"/>
+                <field name="date"/>
+                <field name="requisition_type"/>
+                <field name="originator_name"/>
+                <field name="party_name"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-warning="state == 'waiting'"
+                       decoration-primary="state == 'confirmed'"
+                       decoration-success="state == 'done'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_purchase_requisition" model="ir.actions.act_window">
+        <field name="name">Purchase Requisitions</field>
+        <field name="res_model">purchase.requisition.form</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Menu Items -->
+    <menuitem id="menu_purchase_requisition" name="Material Purchase Requisition"
+              parent="purchase.menu_procurement_management"
+              action="action_purchase_requisition" sequence="1"/>
+</odoo>

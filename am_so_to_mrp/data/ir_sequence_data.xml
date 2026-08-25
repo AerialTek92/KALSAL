@@ -1,0 +1,18 @@
+<odoo>
+    <record id="seq_purchase_requisition" model="ir.sequence">
+        <field name="name">Purchase Requisition</field>
+        <field name="code">purchase.requisition.form</field>
+        <field name="prefix">KSL-PR-</field>
+        <field name="padding">3</field>
+    </record>
+
+    <record id="seq_auto_lot" model="ir.sequence">
+        <field name="name">Automatic Lot Sequence</field>
+        <field name="code">auto.lot.sequence</field>
+        <field name="prefix"></field>
+        <field name="padding">5</field>
+        <field name="number_next">1</field>
+        <field name="number_increment">1</field>
+    </record>
+
+</odoo>

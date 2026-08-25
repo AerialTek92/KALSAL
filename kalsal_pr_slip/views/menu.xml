@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_material_requisition_root"
+              name="Material Requisition"
+              sequence="20"
+              web_icon="kalsal_pr_slip,static/description/icon.png"/>
+
+    <menuitem id="menu_material_requisition_slip"
+              name="Requisition Slips"
+              parent="menu_material_requisition_root"
+              action="action_material_requisition_slip"
+              sequence="10"/>
+</odoo>
