@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ========================================== -->
+    <!-- 1. SEMI-FINISHED QC FORM VIEW             -->
+    <!-- ========================================== -->
+    <record id="view_semi_finished_qc_form" model="ir.ui.view">
+        <field name="name">semi.finished.qc.form</field>
+        <field name="model">semi.finished.qc</field>
+        <field name="arch" type="xml">
+            <form string="Semi-Finished Quality Check">
+                <header>
+                    <button name="action_start" string="Start Testing" type="object"
+                            class="oe_highlight" invisible="state != 'draft'"/>
+
+                    <button name="action_pass" string="Pass QC" type="object"
+                            class="oe_highlight" invisible="state != 'in_progress'"/>
+
+                    <button name="action_fail" string="Fail QC" type="object"
+                            class="btn-danger" invisible="state != 'in_progress'"/>
+
+                    <field name="state" widget="statusbar" statusbar_visible="draft,in_progress,passed,failed"/>
+                </header>
+
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+
+                    <group>
+                        <group string="Document Information">
+                            <!-- AUTO -->
+                            <field name="date" readonly="1"/>
+                            <field name="allowed_sale_order_ids" invisible="1"/>
+                            <field name="sale_order_id"
+                                   readonly="state != 'draft'"
+                                   domain="[('id', 'in', allowed_sale_order_ids)]"/>
+
+                            <!-- Hidden field to feed the domain -->
+                            <field name="allowed_recipe_product_ids" invisible="1"/>
+
+
+                            <!-- Now a selectable dropdown filtered by SO -->
+                            <field name="product_id"
+                                   required="1"
+                                   readonly="state != 'draft' or not sale_order_id"/>
+                            <field name="product_category" required="1"/>
+                            <!-- NEW: behaves exactly like 'Responsible' in the 1st QC -->
+                            <field name="performed_by_id"/>
+                        </group>
+                        <group string="Sampling &amp; Environment">
+                            <!-- MANUAL -->
+                            <field name="batch_no" readonly="1" force_save="1"/>
+                            <field name="allowed_color_ids" invisible="1"/> <!-- ADD THIS -->
+                            <field name="sample_received_date"/>
+                            <field name="test_date"/>
+                            <field name="temperature"/>
+                            <field name="color_id"
+                                   domain="[('id', 'in', allowed_color_ids)]"
+                                   options="{'no_open': True}"/>                      <!-- ADD THIS -->
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Test Parameters">
+                            <!-- NO readonly on the field itself — otherwise onchange-loaded
+                                 lines won't render before saving (1st QC works because it
+                                 only locks the columns, never the field) -->
+                            <field name="line_ids">
+                                <list editable="bottom"
+                                      create="parent.state == 'in_progress'"
+                                      delete="parent.state == 'in_progress'">
+
+                                    <!-- AUTO FROM MASTER — force_save so onchange-filled values survive the save -->
+                                    <field name="parameter_id" readonly="parent.state != 'in_progress'" force_save="1"/>
+                                    <field name="condition" readonly="1" force_save="1"/>
+                                    <field name="specification" readonly="1" force_save="1"/>
+
+                                    <!-- MANUAL ENTRY — locked until Start Testing -->
+                                    <field name="result" readonly="parent.state != 'in_progress'"/>
+
+                                    <field name="status"
+                                           readonly="parent.state != 'in_progress'"
+                                           decoration-success="status == 'pass'"
+                                           decoration-danger="status == 'fail'"
+                                           decoration-warning="status == 'pending'"
+                                           decoration-info="status == 'na'"
+                                           widget="selection"/>
+
+                                    <field name="remarks" readonly="parent.state != 'in_progress'"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ========================================== -->
+    <!-- 2. SEMI-FINISHED QC LIST VIEW              -->
+    <!-- ========================================== -->
+    <record id="view_semi_finished_qc_list" model="ir.ui.view">
+        <field name="name">semi.finished.qc.list</field>
+        <field name="model">semi.finished.qc</field>
+        <field name="arch" type="xml">
+            <list string="Semi-Finished QC"
+                  decoration-success="state == 'passed'"
+                  decoration-danger="state == 'failed'">
+                <field name="name"/>
+                <field name="date"/>
+                <field name="sale_order_id"/>
+                <field name="product_id"/>
+                <field name="batch_no"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ========================================== -->
+    <!-- 3. WINDOW ACTION & TOP-LEVEL MENU         -->
+    <!-- ========================================== -->
+    <record id="action_semi_finished_qc" model="ir.actions.act_window">
+        <field name="name">Semi Finished Quality Check</field>
+        <field name="res_model">semi.finished.qc</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Integrated inside the Quality Inspections sidebar -->
+    <menuitem id="menu_semi_finished_qc"
+              name="Semi Finished QC"
+              parent="am_kalsal_quality.menu_vehicle_inspection_root"
+              action="action_semi_finished_qc"
+              sequence="19"/>
+
+</odoo>

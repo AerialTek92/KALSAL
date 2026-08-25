@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="seq_semi_finished_qc" model="ir.sequence">
+        <field name="name">Semi Finished QC Sequence</field>
+        <field name="code">semi.finished.qc</field>
+        <field name="prefix">SFG-QC/%(year)s/</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
+</odoo>

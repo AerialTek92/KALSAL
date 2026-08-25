@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ========================================== -->
+    <!-- 1. REWORK SHEET FORM VIEW                 -->
+    <!-- ========================================== -->
+    <record id="view_kalsal_rework_sheet_form" model="ir.ui.view">
+        <field name="name">kalsal.rework.sheet.form</field>
+        <field name="model">kalsal.rework.sheet</field>
+        <field name="arch" type="xml">
+            <form string="Rework Check Sheet">
+                <header>
+                    <button name="action_confirm_rework" string="Confirm Rework" type="object"
+                            class="oe_highlight" invisible="state != 'draft'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,passed"/>
+                </header>
+
+                <sheet>
+                    <!-- Smart Buttons Area -->
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_failed_qc"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-eye"
+                                invisible="not semi_finished_qc_id">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_text">View Failed</span>
+                                <span class="o_stat_text">QC</span>
+                            </div>
+                        </button>
+
+                        <!-- NEW SMART BUTTON: Post-Rework QC -->
+                        <button name="action_create_or_view_post_rework_qc"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-flask"
+                                invisible="not post_rework_qc_id">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_text">Post-Rework</span>
+                                <span class="o_stat_text">QC</span>
+                            </div>
+                        </button>
+                    </div>
+
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+
+                    <!-- Section 1: Document Information -->
+                    <group string="Document Information">
+                        <group>
+                            <field name="semi_finished_qc_id"/>
+                        </group>
+                        <group>
+                            <field name="sale_order_id" readonly="1"/>
+                            <field name="product_id" readonly="1"/>
+                            <field name="batch_no" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <!-- Section 2: Rework & Batch Details -->
+                    <group string="Rework &amp; Batch Details">
+                        <group>
+                            <field name="production_date"/>
+                            <field name="expiry_date"/>
+                            <field name="rework_qty"/>
+                        </group>
+                        <group>
+                            <field name="freshly_produced_qty"/>
+                            <field name="actual_rework_pct"/>
+                            <field name="quantity_added"/>
+                            <field name="total_batch_qty"/>
+                        </group>
+                    </group>
+
+                    <!-- Section 3: Sign-Off -->
+                    <group string="Sign-Off">
+                        <group>
+                            <field name="checked_by"/>
+                        </group>
+                        <group>
+                            <field name="verified_by_qc"/>
+                        </group>
+                    </group>
+
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ========================================== -->
+    <!-- 2. REWORK SHEET LIST VIEW                  -->
+    <!-- ========================================== -->
+    <record id="view_kalsal_rework_sheet_list" model="ir.ui.view">
+        <field name="name">kalsal.rework.sheet.list</field>
+        <field name="model">kalsal.rework.sheet</field>
+        <field name="arch" type="xml">
+            <list string="Rework Sheets"
+                  decoration-success="state == 'passed'"
+                  decoration-info="state == 'draft'">
+                <field name="name"/>
+                <field name="semi_finished_qc_id"/>
+                <field name="product_id"/>
+                <field name="batch_no"/>
+                <field name="total_batch_qty"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ========================================== -->
+    <!-- 3. WINDOW ACTION                          -->
+    <!-- ========================================== -->
+    <record id="action_kalsal_rework_sheet" model="ir.actions.act_window">
+        <field name="name">Rework Sheets</field>
+        <field name="res_model">kalsal.rework.sheet</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create a new Rework Sheet
+            </p>
+            <p>Rework sheets are created for batches that failed the Semi-Finished QC.</p>
+        </field>
+    </record>
+
+    <!-- ========================================== -->
+    <!-- 4. MENU ITEM (Inside Quality Inspections)  -->
+    <!-- ========================================== -->
+    <menuitem id="menu_kalsal_rework_sheet"
+              name="Rework Sheets"
+              parent="am_kalsal_quality.menu_vehicle_inspection_root"
+              action="action_kalsal_rework_sheet"
+              sequence="21"/>
+
+    <!-- ========================================== -->
+    <!-- 5. INHERIT SFG-QC FORM: DISCARD BANNER      -->
+    <!-- ========================================== -->
+    <record id="view_semi_finished_qc_form_inherit_discard" model="ir.ui.view">
+        <field name="name">semi.finished.qc.form.inherit.discard</field>
+        <field name="model">semi.finished.qc</field>
+        <field name="inherit_id" ref="fk_semi_finished_qc.view_semi_finished_qc_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="after">
+                <field name="is_post_rework_qc" invisible="1"/>
+                <div class="alert alert-danger" role="alert"
+                     invisible="state != 'failed' or not is_post_rework_qc">
+                    <strong>⚠️ Batch Discarded:</strong>
+                    This Post-Rework QC has failed. The batch has already been
+                    reworked once and must be discarded — no second rework is allowed.
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
