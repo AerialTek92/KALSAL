@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partial_acceptance_wizard_form" model="ir.ui.view">
+        <field name="name">kalsal.partial.acceptance.wizard.form</field>
+        <field name="model">kalsal.partial.acceptance.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Partial Acceptance by Lot">
+                <group>
+                    <field name="qc_id" invisible="1"/>
+                </group>
+                <p class="text-muted">
+                    Specify the accepted quantity for each lot/serial number.
+                    The system will automatically move accepted goods to WH/Stock and return rejected goods to the vendor.
+                </p>
+                <field name="line_ids">
+                    <list editable="bottom" create="false" delete="false">
+                        <field name="move_line_id" column_invisible="1"/>
+                        <field name="product_id" readonly="1"/>
+                        <field name="lot_id" readonly="1"/>
+                        <field name="total_qty" readonly="1"/>
+                        <field name="accepted_qty"/>
+                        <field name="rejected_qty" readonly="1"/>
+                    </list>
+                </field>
+                <footer>
+                    <button string="Confirm Partial Acceptance"
+                            type="object"
+                            name="action_confirm_partial_acceptance"
+                            class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

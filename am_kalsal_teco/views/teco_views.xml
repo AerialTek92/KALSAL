@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Form View -->
+        <record id="teco_production_form_view" model="ir.ui.view">
+            <field name="name">teco.production.form</field>
+            <field name="model">teco.production</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="name" readonly="1"/>
+                            </h1>
+                        </div>
+
+                        <!-- Corrected standard group layout -->
+                        <group>
+                            <group>
+                                <field name="sale_order_id" string="SO Number"/>
+                            </group>
+                            <group>
+                                <!-- Hidden computed field for dynamic domain -->
+                                <field name="available_product_ids" invisible="1"/>
+
+                                <!-- Product Field applying the dynamic domain -->
+                                <field name="product_id"
+                                       string="Product"
+                                       domain="[('id', 'in', available_product_ids)]"
+                                       options="{'no_create': True, 'no_create_edit': True}"/>
+                            </group>
+                        </group>
+
+                        <notebook>
+                            <!-- Tab 1: Reel Consumption -->
+                            <page string="Reel Consumption">
+                                <field name="reel_consumption_line_ids">
+                                    <list editable="bottom" create="0">
+                                        <field name="total_qty" readonly="0"/>
+                                        <field name="order_qty_required_kgs" readonly="1"/>
+                                        <field name="total_reel_used_kgs"/>
+                                        <field name="total_pack_produced" />
+                                        <field name="scrap_percentage" widget="percentage" readonly="1"/>
+                                        <field name="reason_high_scrap" required="scrap_percentage > 0.02"/>
+                                    </list>
+                                </field>
+                            </page>
+
+                            <!-- Tab 2: Material Issuance -->
+                            <page string="Material Issuance">
+                                <field name="material_issuance_line_ids">
+                                    <list editable="bottom" create="0">
+                                        <field name="order_qty_required_kgs"/>
+                                        <field name="material_issue"/>
+                                        <field name="total_produced_qty"/>
+                                        <field name="scrap_percentage" widget="percentage" readonly="1"/>
+                                        <field name="reason_high_scrap" required="scrap_percentage > 0.02"/>
+                                    </list>
+                                </field>
+                            </page>
+
+                            <!-- Tab 3: Box Usage -->
+                            <page string="Box Usage">
+                                <field name="box_usage_line_ids">
+                                    <list editable="bottom" create="0">
+                                        <field name="total_qty"/>
+                                        <field name="order_qty_required" readonly="1"/>
+                                        <field name="total_box_used"/>
+                                        <field name="total_pack_produced"/>
+                                        <field name="scrap_percentage" widget="percentage" readonly="1"/>
+                                        <field name="reason_high_scrap" required="scrap_percentage > 0.02"/>
+                                    </list>
+                                </field>
+                            </page>
+
+                            <!-- Tab 4: Gum Issuance -->
+                            <page string="Gum Issuance">
+                                <field name="gum_issuance_line_ids">
+                                    <list editable="bottom" create="0">
+                                        <field name="ttl_boxes_req"/>
+                                        <field name="total_gum_issued"/>
+                                        <field name="gum_used"/>
+                                        <field name="scrap_percentage" widget="percentage" readonly="1"/>
+                                        <field name="reason_high_scrap" required="scrap_percentage > 0.02"/>
+                                    </list>
+                                </field>
+                            </page>
+
+                            <!-- Tab 5: Production -->
+                            <page string="GE">
+                                <field name="production_line_ids">
+                                    <list editable="bottom" create="0">
+                                        <field name="prod_in_units"/>
+                                        <field name="total_capacity"/>
+                                        <field name="global_efficiency" widget="percentage" readonly="1"/>
+                                        <field name="reason_low_prod"/>
+                                    </list>
+                                </field>
+                            </page>
+
+                            <!-- Tab 6: Labor (Men Power) -->
+                            <page string="Labor (Men Power)">
+                                <field name="labor_line_ids">
+                                    <list editable="bottom" create="0">
+                                        <field name="approved_men_power" readonly="1"/>
+                                        <field name="used_men_power"/>
+                                        <field name="days_used"/>
+                                        <field name="percent_extra_wrk" widget="percentage" readonly="1"/>
+                                        <field name="high_labor_cost"/>
+                                    </list>
+                                </field>
+                            </page>
+                        </notebook>
+                    </sheet>
+
+                    <!-- Modern Odoo 17/18/19 Chatter tag -->
+                </form>
+            </field>
+        </record>
+
+        <!-- list/List View -->
+        <record id="teco_production_list_view" model="ir.ui.view">
+            <field name="name">teco.production.list</field>
+            <field name="model">teco.production</field>
+            <field name="arch" type="xml">
+                <list string="TECO Productions">
+                    <field name="name"/>
+                    <field name="sale_order_id" string="SO Number"/>
+                    <field name="product_id" string="Product"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- Action -->
+        <record id="action_teco_production" model="ir.actions.act_window">
+            <field name="name">TECO Production</field>
+            <field name="res_model">teco.production</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Create a new TECO Production record.
+                </p>
+            </field>
+        </record>
+
+        <!-- Menu -->
+        <menuitem id="menu_teco_production" name="TECO Production" parent="mrp.menu_mrp_root"
+                  action="action_teco_production" sequence="35"/>
+    </data>
+</odoo>

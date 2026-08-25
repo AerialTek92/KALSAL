@@ -1,0 +1,8 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_teco_production_user,teco.production.user,model_teco_production,base.group_user,1,1,1,1
+access_teco_reel_consumption_user,teco.reel.consumption.user,model_teco_reel_consumption,base.group_user,1,1,1,1
+access_teco_material_issuance_user,teco.material.issuance.user,model_teco_material_issuance,base.group_user,1,1,1,1
+access_teco_box_usage_user,teco.box.usage.user,model_teco_box_usage,base.group_user,1,1,1,1
+access_teco_gum_issuance_user,teco.gum.issuance.user,model_teco_gum_issuance,base.group_user,1,1,1,1
+access_teco_production_line_user,teco.production.line.user,model_teco_production_line,base.group_user,1,1,1,1
+access_teco_labor_line_user,teco.labor.line.user,model_teco_labor_line,base.group_user,1,1,1,1

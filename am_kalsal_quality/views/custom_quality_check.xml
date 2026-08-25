@@ -1,0 +1,404 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ==================== FORM VIEW ==================== -->
+    <record id="view_kalsal_quality_check_form" model="ir.ui.view">
+        <field name="name">kalsal.quality.check.form</field>
+        <field name="model">kalsal.quality.check</field>
+        <field name="arch" type="xml">
+            <form string="Quality Check">
+                <header>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,1st_in_progress,waiting_delay,2nd_in_progress,pass"/>
+
+                    <button name="action_start" type="object"
+                            string="Start 1st QC"
+                            class="oe_highlight"
+                            invisible="state != 'draft'"/>
+
+                    <button name="action_complete_1st_qc" type="object"
+                            string="Pass 1st QC"
+                            class="oe_highlight"
+                            invisible="state != '1st_in_progress'"/>
+                    <button name="action_fail" type="object"
+                            string="Fail"
+                            invisible="state != '1st_in_progress'"/>
+
+                    <button name="action_start_2nd_qc" type="object"
+                            string="Start 2nd QC"
+                            class="oe_highlight"
+                            invisible="state != 'waiting_delay'"/>
+
+                    <button name="action_pass" type="object"
+                            string="Pass 2nd QC"
+                            class="oe_highlight"
+                            invisible="state != '2nd_in_progress'"/>
+                    <button name="action_fail" type="object"
+                            string="Fail"
+                            invisible="state != '2nd_in_progress'"/>
+
+                    <!-- New Partial Acceptance Button (Odoo 19 syntax) -->
+                    <button name="action_open_partial_wizard"
+                            type="object"
+                            string="Partial Accept"
+                            class="oe_highlight"
+                            invisible="state in ('pass', 'fail', 'cancel','draft','waiting_delay')"/>
+
+                    <button name="action_cancel" type="object"
+                            string="Cancel"
+                            invisible="state in ('draft', 'cancel', 'pass', 'fail')"/>
+
+                    <!--                    <button name="action_reset_to_draft" type="object"-->
+                    <!--                            string="Reset to Draft"-->
+                    <!--                            invisible="state not in ('fail', 'cancel', 'pass')"/>-->
+
+                </header>
+
+                <!-- Delay Overdue Warning Banner -->
+                <div class="alert alert-warning" role="alert"
+                     invisible="not is_delay_overdue">
+                    <strong>⚠️ Delay Period Ended!</strong>
+                    The delay period for this Quality Check has ended.
+                    Please click "Start 2nd QC" to enter results for the
+                    delayed test parameters.
+                </div>
+
+                <!-- Waiting Delay Info Banner -->
+                <div class="alert alert-info" role="alert"
+                     invisible="state != 'waiting_delay'">
+                    <strong>Waiting Delay Period</strong>
+                    —
+                    <field name="days_remaining" readonly="1"/>
+                    day(s)
+                    remaining until 2nd QC results are due.
+                    (Due:<field name="delay_due_date" widget="datetime"/>)
+                </div>
+
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_qc_picking" type="object"
+                                class="oe_stat_button" icon="fa-truck" string="QC Hold Transfer"
+                                invisible="not picking_ids">
+                        </button>
+
+                        <button name="action_view_return_picking" type="object"
+                                class="oe_stat_button" icon="fa-repeat" string="Partial Return Picking"
+                                invisible="not return_picking_id">
+                        </button>
+
+                        <!--                        <button name="action_view_stock_up_picking" type="object"-->
+                        <!--                                class="oe_stat_button" icon="oi-transfer" string="Stock Transfer"-->
+                        <!--                                invisible="not internal_transfer_id">-->
+                        <!--                        </button>-->
+                    </div>
+
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+
+                    <group>
+                        <group>
+                            <field name="date"/>
+                            <field name="product_id"/>
+                            <field name="partner_id"/>
+                            <field name="lot_id"/>
+                            <field name="responsible_id"/>
+
+                            <!-- Make sure this hidden field is present on your view layout -->
+                            <field name="product_tmpl_id" invisible="1"/>
+
+                            <field name="color_id"
+                                   required="0"
+                                   domain="product_tmpl_id and [('product_tmpl_id', '=', product_tmpl_id)] or [('id', '=', 0)]"
+                                   context="{'default_product_tmpl_id': product_tmpl_id}"
+                                   options="{'no_quick_create': False, 'no_create_edit': False}"/>
+                        </group>
+                        <group>
+                            <field name="has_delayed_params" invisible="1"/>
+                            <field name="delay_days"
+                                   invisible="not has_delayed_params"/>
+                            <field name="delay_start_date" readonly="1"
+                                   invisible="not has_delayed_params"/>
+                            <field name="delay_due_date"
+                                   invisible="not has_delayed_params"/>
+                            <field name="first_qc_date" readonly="1"/>
+                            <field name="second_qc_date" readonly="1"/>
+                            <!--                            <field name="internal_transfer_id" readonly="1"/>-->
+                            <field name="is_delay_overdue" invisible="1"/>
+                            <field name="kanban_state" invisible="1"/>
+                        </group>
+                    </group>
+
+                    <!-- Summary badges -->
+
+                    <notebook>
+                        <!-- Test Parameters Tab -->
+                        <page string="Test Parameters">
+
+                            <!-- 1. FIRST QC: Shows ONLY non-delayed parameters during 1st QC -->
+                            <field name="first_qc_line_ids" invisible="state != '1st_in_progress'">
+                                <list editable="bottom" create="0">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="test_parameter" readonly="1"/>
+                                    <field name="delay_required" widget="boolean_toggle" readonly="1"/>
+                                    <field name="condition" readonly="1"/>
+                                    <field name="specification" readonly="1"/>
+
+                                    <!-- Fully editable because this list ONLY shows during 1st_in_progress -->
+                                    <field name="result"/>
+                                    <field name="status"
+                                           decoration-success="status == 'pass'"
+                                           decoration-danger="status == 'fail'"
+                                           decoration-warning="status == 'pending'"
+                                           decoration-info="status == 'na'"/>
+                                    <field name="remarks"/>
+                                    <field name="status_color" column_invisible="1"/>
+                                </list>
+                            </field>
+
+                            <!-- 2. SECOND QC: Shows ONLY delayed parameters during waiting & 2nd QC -->
+                            <field name="second_qc_line_ids"
+                                   invisible="state not in ('waiting_delay', '2nd_in_progress')">
+                                <list editable="bottom" create="0">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="test_parameter" readonly="1"/>
+                                    <field name="delay_required" widget="boolean_toggle" readonly="1"/>
+                                    <field name="condition" readonly="1"/>
+                                    <field name="specification" readonly="1"/>
+
+                                    <!-- Readonly ONLY while waiting for the delay to end. Editable once 2nd QC starts -->
+                                    <field name="result" readonly="parent.state == 'waiting_delay'"/>
+                                    <field name="status"
+                                           decoration-success="status == 'pass'"
+                                           decoration-danger="status == 'fail'"
+                                           decoration-warning="status == 'pending'"
+                                           decoration-info="status == 'na'"
+                                           readonly="parent.state == 'waiting_delay'"/>
+                                    <field name="remarks" readonly="parent.state == 'waiting_delay'"/>
+                                    <field name="status_color" column_invisible="1"/>
+                                </list>
+                            </field>
+
+                            <!-- 3. ALL PARAMETERS: Shows everything during Draft, Pass, Fail, Cancel -->
+                            <field name="check_line_ids" invisible="state not in ('draft', 'pass', 'fail', 'cancel')">
+                                <list editable="bottom" create="0">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="test_parameter" readonly="1"/>
+                                    <field name="delay_required" widget="boolean_toggle" readonly="1"/>
+                                    <field name="condition" readonly="1"/>
+                                    <field name="specification" readonly="1"/>
+
+                                    <!-- Hardcoded to readonly=1 because the parent document is not active in these states -->
+                                    <field name="result" readonly="1"/>
+                                    <field name="status"
+                                           decoration-success="status == 'pass'"
+                                           decoration-danger="status == 'fail'"
+                                           decoration-warning="status == 'pending'"
+                                           decoration-info="status == 'na'"
+                                           readonly="1"/>
+                                    <field name="remarks" readonly="1"/>
+                                    <field name="status_color" column_invisible="1"/>
+                                </list>
+                            </field>
+
+                            <!-- SUMMARY SECTION -->
+                            <group string="Summary">
+                                <group>
+                                    <field name="total_pass" widget="statinfo" string="Passed"/>
+                                    <field name="total_fail" widget="statinfo" string="Failed"/>
+                                </group>
+                                <group>
+                                    <field name="total_pending" widget="statinfo" string="Pending"/>
+                                    <field name="overall_result" readonly="1"/>
+                                </group>
+                            </group>
+
+                            <button name="action_load_default_lines"
+                                    type="object" string="Reload Default Parameters"
+                                    class="btn-link mt-2"/>
+                        </page>
+                        <!-- Item Description Tab -->
+                        <page string="Item Description">
+                            <group>
+                                <field name="formulated_ingredients"/>
+                                <field name="packing_n_delivery"/>
+                                <field name="delay_notification_sent"/>
+                            </group>
+                        </page>
+                        <page string="Quantity Inspection" name="quantity_inspection">
+                            <group>
+                                <group>
+                                    <field name="received_qty" readonly="1"/>
+                                    <field name="accepted_qty" readonly="state in ('pass', 'fail', 'cancel')"/>
+                                    <field name="rejected_qty" readonly="1"/>
+                                    <field name="is_partial" invisible="1"/>
+                                </group>
+                                <group>
+                                    <field name="return_picking_id" readonly="1"/>
+                                    <button name="action_view_return_picking"
+                                            type="object"
+                                            string="View Return Transfer"
+                                            class="oe_highlight"
+                                            invisible="not return_picking_id"/>
+                                </group>
+                            </group>
+                            <div class="alert alert-warning" role="alert"
+                                 invisible="not is_partial">
+                                <strong>Partial Acceptance:</strong>
+                                Accepted quantity will be moved
+                                to WH/Stock, and rejected quantity will be automatically returned to
+                                the vendor upon QC completion.
+                            </div>
+                        </page>
+                        <!-- Notes Tab -->
+                        <page string="Notes">
+                            <field name="notes" widget="html"/>
+                        </page>
+                    </notebook>
+                </sheet>
+
+                <!--                <div class="oe_chatter">-->
+                <!--                    <field name="message_follower_ids"/>-->
+                <!--                    <field name="activity_ids"/>-->
+                <!--                    <field name="message_ids"/>-->
+                <!--                </div>-->
+            </form>
+        </field>
+    </record>
+
+    <!-- ==================== list VIEW ==================== -->
+    <record id="view_kalsal_quality_check_list" model="ir.ui.view">
+        <field name="name">kalsal.quality.check.list</field>
+        <field name="model">kalsal.quality.check</field>
+        <field name="arch" type="xml">
+            <list string="Quality Checks"
+                  decoration-success="state == 'pass'"
+                  decoration-danger="state == 'fail'"
+                  decoration-warning="state == 'waiting_delay' and is_delay_overdue"
+                  decoration-info="state == 'waiting_delay' and not is_delay_overdue">
+                <field name="name"/>
+                <field name="date"/>
+                <field name="product_id"/>
+                <field name="partner_id"/>
+                <field name="has_delayed_params" invisible="1"/>
+                <field name="delay_due_date" optional="hide"/>
+                <field name="is_delay_overdue" optional="hide"/>
+                <field name="overall_result"
+                       widget="label_selection"
+                       options="{'pass': 'success', 'fail': 'danger', 'pending': 'warning'}"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'pass'"
+                       decoration-danger="state == 'fail'"
+                       decoration-warning="state == 'waiting_delay'"
+                       decoration-info="state == '2nd_in_progress'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- 1. Custom Activity Type for OVERDUE (2nd QC Required) -->
+    <record id="mail_activity_type_2nd_qc" model="mail.activity.type">
+        <field name="name">2nd QC Required</field>
+        <field name="icon">fa-hourglass-end</field>
+        <field name="res_model">kalsal.quality.check</field>
+    </record>
+
+    <!-- 2. NEW: Custom Activity Type for APPROACHING REMINDER -->
+    <record id="mail_activity_type_delay_reminder" model="mail.activity.type">
+        <field name="name">Delay Ending Soon</field>
+        <field name="icon">fa-hourglass-half</field>
+        <field name="res_model">kalsal.quality.check</field>
+    </record>
+    <!-- 2. Action for Browser Notification Click -->
+    <record id="action_delayed_qc_list" model="ir.actions.act_window">
+        <field name="name">Delayed Quality Checks</field>
+        <field name="res_model">kalsal.quality.check</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_kalsal_quality_check_search"/>
+        <!-- Simplified domain -->
+        <field name="domain">[('is_delay_overdue', '=', True)]</field>
+        <field name="context">{'search_default_filter_overdue': True}</field>
+    </record>
+
+    <!-- ==================== SEARCH VIEW ==================== -->
+    <record id="view_kalsal_quality_check_search" model="ir.ui.view">
+        <field name="name">kalsal.quality.check.search</field>
+        <field name="model">kalsal.quality.check</field>
+        <field name="arch" type="xml">
+            <search string="Quality Checks">
+                <field name="name"/>
+                <field name="product_id"/>
+                <field name="partner_id"/>
+                <field name="lot_id"/>
+                <field name="responsible_id"/>
+
+                <!-- FIX: Odoo's systray looks for this exact filter name -->
+                <!-- Systray-compatible filter (keep name as-is; scope is "any open activity assigned to me") -->
+                <separator/>
+                <filter name="my_activities" string="My Activities"
+                        domain="[('activity_ids.user_id', '=', uid)]"
+                        help="Any activity assigned to me, regardless of due date"/>
+
+                <!-- NEW: date-scoped activity filters using the built-in activity_state field -->
+                <filter name="activities_overdue" string="Late Activities"
+                        domain="[('activity_state', '=', 'overdue')]"
+                        help="Activities that are past their due date"/>
+                <filter name="activities_today" string="Activities Due Today"
+                        domain="[('activity_state', '=', 'today')]"/>
+                <filter name="activities_planned" string="Activities Planned"
+                        domain="[('activity_state', '=', 'planned')]"/>
+                <separator/>
+
+                <filter name="filter_draft" string="Draft"
+                        domain="[('state', '=', 'draft')]"/>
+                <filter name="filter_1st" string="1st QC In Progress"
+                        domain="[('state', '=', '1st_in_progress')]"/>
+                <filter name="filter_waiting" string="Waiting Delay"
+                        domain="[('state', '=', 'waiting_delay')]"/>
+                <filter name="filter_overdue" string="⚠️ Delay Overdue"
+                        domain="[('is_delay_overdue', '=', True)]"/>
+                <filter name="filter_2nd" string="2nd QC In Progress"
+                        domain="[('state', '=', '2nd_in_progress')]"/>
+                <!-- FIX: Lowercase 'filter' -->
+                <filter name="filter_pass" string="Passed"
+                        domain="[('state', '=', 'pass')]"/>
+                <filter name="filter_fail" string="Failed"
+                        domain="[('state', '=', 'fail')]"/>
+
+                <filter name="group_state" string="State"
+                        context="{'group_by': 'state'}"/>
+                <filter name="group_product" string="Product"
+                        context="{'group_by': 'product_id'}"/>
+                <filter name="group_responsible" string="Responsible"
+                        context="{'group_by': 'responsible_id'}"/>
+                <filter name="group_date" string="Date"
+                        context="{'group_by': 'date:day'}"/>
+            </search>
+        </field>
+    </record>
+
+
+    <!-- ==================== ACTION ==================== -->
+    <record id="action_kalsal_quality_check" model="ir.actions.act_window">
+        <field name="name">Quality Checks</field>
+        <field name="res_model">kalsal.quality.check</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_kalsal_quality_check_search"/>
+        <field name="context">{'search_default_activities_overdue': 0}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create a new Quality Check
+            </p>
+        </field>
+    </record>
+
+    <!-- ==================== MENU ==================== -->
+    <menuitem id="menu_kalsal_quality_check"
+              name="Kalsal Quality Checks"
+              parent="menu_vehicle_inspection_root"
+              action="action_kalsal_quality_check"
+              sequence="10"/>
+
+</odoo>

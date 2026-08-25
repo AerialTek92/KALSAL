@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <record id="view_picking_vehicle_button" model="ir.ui.view">
+        <field name="name">view.picking.vehicle.button</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <!-- Ribbon will only show if it's a GRN (incoming) AND its state is 'done' -->
+                <widget name="web_ribbon"
+                        title="Vehicle Passed"
+                        bg_color="bg-success"
+                        invisible="picking_type_code != 'incoming' or state != 'inspection_passed'"/>
+                <widget name="web_ribbon"
+                        title="Inspection In Progress"
+                        bg_color="bg-primary"
+                        invisible="picking_type_code != 'incoming' or state != 'vehicle_inspection'"/>
+                <widget name="web_ribbon"
+                        title="Return To Vendor"
+                        bg_color="bg-danger"
+                        invisible="picking_type_code != 'incoming' or state != 'cancel'"/>
+                <widget name="web_ribbon"
+                        title="All QC Failed"
+                        bg_color="bg-danger"
+                        invisible="picking_type_code != 'incoming' or state != 'qc_failed'"/>
+                <widget name="web_ribbon"
+                        title="1st QC Passed"
+                        bg_color="bg-success"
+                        invisible="picking_type_code != 'incoming' or state != 'assigned'"/>
+            </xpath>
+
+                    <!-- Target the button box itself and insert the button at the very beginning -->
+        <xpath expr="//div[@name='button_box']/button[1]" position="before">
+            <button name="po_view"
+                    type="object"
+                    class="oe_stat_button"
+                    icon="fa-money"
+                    invisible="not purchase_id"> <!-- Updated to standard purchase_id -->
+                <div class="o_field_widget o_stat_info">
+                    <span class="o_stat_text">Purchase Order</span>
+                </div>
+            </button>
+            <button name="action_view_purchase"
+                    type="object"
+                    class="oe_stat_button"
+                    icon="fa-money"
+                    invisible="not linked_purchase_id or purchase_id"> <!-- Updated to standard purchase_id -->
+                <div class="o_field_widget o_stat_info">
+                    <span class="o_stat_text">Purchase Order</span>
+                </div>
+            </button>
+            <button name="action_view_prev_transfer"
+                    type="object"
+                    class="oe_stat_button"
+                    icon="fa-truck"
+                    invisible="not previous_transfer_id"> <!-- Updated to standard purchase_id -->
+                <div class="o_field_widget o_stat_info">
+                    <span class="o_stat_text">Linked Transfer</span>
+                </div>
+            </button>
+        </xpath>
+
+
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_inspection"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-truck"
+                        invisible="not vehicle_inspection_id">
+                    <div class="o_field_widget o_stat_info">
+                        <span class="o_stat_text">Vehicle Inspection</span>
+                    </div>
+                </button>
+
+                <button name="action_view_qc_records"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-check-square-o"
+                        invisible="qc_count == 0">
+                    <field name="qc_count" widget="statinfo" string="Quality Checks"/>
+                </button>
+                <button name="action_view_passed_qc"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-check-square-o"
+                        invisible="not passed_qc_id"
+                        string="Passed QCs">
+                </button>
+            </xpath>
+
+            <xpath expr="//form//sheet" position="inside">
+                <!-- Explicitly bypass the security check by granting visibility to all base users -->
+                <field name="is_storage_operation" invisible="1" groups="base.group_user"/>
+            </xpath>
+
+            <!-- Add the button in the header, visible only when state is 'vehicle_inspection' -->
+            <xpath expr="//header/button[@name='button_validate']" position="before">
+                <button name="button_inspect" string="Inspect Vehicle" type="object"
+                        class="btn-primary" invisible="state != 'vehicle_inspection' or vehicle_inspection_id"/>
+                <button name="initiate_qc" string="Initiate QC" type="object"
+                        class="btn-primary"
+                        invisible="state != 'inspection_passed' or qc_count != 0 or is_dest_wh_stock or picking_type_code != 'incoming'"/>
+            </xpath>
+
+            <!-- 1. Replace the GRN (Incoming) Status Bar -->
+            <xpath expr="//header/field[@name='state'][1]" position="replace">
+                <field name="state" widget="statusbar"
+                       invisible="picking_type_code != 'incoming'"
+                       statusbar_visible="draft,assigned,vehicle_inspection,done"/>
+            </xpath>
+
+            <!-- 2. Hide BOTH Validate Buttons during your custom states -->
+            <!-- The primary highlighted button -->
+            <xpath expr="//header/button[@name='button_validate'][hasclass('oe_highlight')]" position="attributes">
+                <attribute name="invisible">state in ['draft','vehicle_inspection','qc_pending','confirmed','done','cancel','qc_failed','inspection_passed']
+                </attribute>
+            </xpath>
+
+            <xpath expr="//header/button[@name='action_cancel']" position="attributes">
+                <attribute name="invisible">state not in ['assigned', 'confirmed', 'draft', 'waiting','vehicle_inspection','inspection_passed','qc_pending']
+                </attribute>
+            </xpath>
+            <!-- The secondary non-highlighted button -->
+            <xpath expr="//header/button[@name='button_validate'][hasclass('o_btn_validate')]" position="attributes">
+                <attribute name="invisible">state in ['waiting','assigned','vehicle_inspection','qc_pending','done','cancel','qc_failed','inspection_passed']
+                </attribute>
+            </xpath>
+
+            <!-- Optional: Add a smart button or field to show the linked inspection -->
+            <xpath expr="//field[@name='origin']" position="after">
+                <field name="inv_no" invisible="is_dest_wh_stock or picking_type_code != 'incoming'"/>
+                <field name="inv_date" invisible="is_dest_wh_stock or picking_type_code != 'incoming'"/>
+            </xpath>
+            <xpath expr="//field[@name='location_dest_id'][2]" position="after">
+                <field name="challan_no" invisible="is_dest_wh_stock or picking_type_code != 'incoming'"/>
+                <field name="challan_date" invisible="is_dest_wh_stock or picking_type_code != 'incoming'"/>
+                <field name="vehicle_id" invisible="not vehicle_id or picking_type_code != 'incoming'"/>
+            </xpath>
+            <xpath expr="//notebook/page[@name='operations']/field/list/field[@name='quantity']" position="attributes">
+                <attribute name="string">Received Qty</attribute>
+            </xpath>
+            <xpath expr="//notebook/page[@name='operations']/field/list/field[@name='product_id']" position="before">
+                <field name="purchase_id" column_invisible="not parent.purchase_id" string="PO No#"/>
+                <field name="purchase_order_date" column_invisible="not parent.purchase_id"
+                       string="PO Date"/>
+            </xpath>
+            <xpath expr="//notebook/page[@name='operations']/field/list/field[@name='product_uom_qty']" position="before">
+                <field name="challan_qty" readonly="qc_updated"/>
+            </xpath>
+            <!-- Block 1: Make the move lines read-only based on states -->
+            <xpath expr="//notebook/page[@name='operations']/field[@name='move_ids']" position="attributes">
+                <attribute name="readonly">state in ['done', 'vehicle_inspection'] and is_locked
+                </attribute>
+            </xpath>
+            <xpath expr="//notebook/page[@name='operations']/field[@name='move_ids']/list/field[@name='quantity']" position="attributes">
+                <attribute name="readonly">qc_updated == True</attribute>
+            </xpath>
+
+            <!-- Block 2: Inject quality check quantities into the specific stock move list view -->
+            <xpath expr="//notebook/page[@name='operations']/field[@name='move_ids']/list/field[@name='product_uom_qty']" position="attributes">
+                <attribute name="column_invisible">parent.is_storage_operation == True</attribute>
+            </xpath>
+            <xpath expr="//notebook/page[@name='operations']/field[@name='move_ids']/list/field[@name='quantity']" position="attributes">
+                <attribute name="column_invisible">False</attribute>
+            </xpath>
+            <xpath expr="//notebook/page[@name='operations']/field[@name='move_ids']/list/field[@name='lot_ids']" position="attributes">
+                <attribute name="column_invisible">False</attribute>
+            </xpath>
+            <xpath expr="//notebook/page[@name='operations']/field[@name='move_ids']/list/field[@name='quantity']"
+                   position="after">
+                <field name="qc_updated" column_invisible="1"/>
+                <field name="short_qty" readonly="qc_updated"/>
+                <field name="excess_qty" readonly="qc_updated"/>
+                <field name="accepted_qty" readonly="qc_updated" column_invisible="parent.is_storage_operation == True or parent.backorder_id"/>
+                <field name="rejected_qty" readonly="qc_updated" column_invisible="parent.is_storage_operation == True or parent.backorder_id"/>
+            </xpath>
+
+
+
+        </field>
+    </record>
+</odoo>

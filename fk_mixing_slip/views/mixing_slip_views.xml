@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============ FORM (mirrors your paper slip) ============ -->
+    <record id="view_mixing_slip_form" model="ir.ui.view">
+        <field name="name">mixing.slip.form</field>
+        <field name="model">mixing.slip</field>
+        <field name="arch" type="xml">
+            <form string="Mixing Slip">
+                <header>
+                    <button name="action_mark_mixing_done" type="object"
+                            string="Mark Mixing Done" class="oe_highlight"
+                            invisible="state != 'draft'"/>
+                    <button name="action_reset_to_draft" type="object"
+                            string="Reset to Draft"
+                            invisible="state != 'done'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_source_mrs"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-reply"
+                                invisible="not mrs_id">
+                            <div class="o_stat_info">
+                                <span class="o_stat_text">View Source MRS</span>
+                            </div>
+                        </button>
+                    </div>
+
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="customer_name"/>
+                            <field name="sale_order_id"
+                                   readonly="state == 'done' or (id and mrs_id)"/>
+                        </group>
+                        <group>
+                            <!-- Hidden, but loaded so the domain below works -->
+                            <field name="allowed_recipe_product_ids" invisible="1"/>
+                            <field name="recipe_product_id"
+                                   readonly="state == 'done' or not sale_order_id or (id and mrs_id)"
+                                   required="sale_order_id"
+                                   options="{'no_open': True}"/>
+                            <field name="total_bags" readonly="state == 'done'"/>
+                        </group>
+                    </group>
+
+                    <field name="line_ids">
+                        <list editable="bottom" create="0" delete="0">
+                            <field name="mrs_line_id" column_invisible="1" force_save="1"/>
+                            <field name="product_id" column_invisible="1"/>
+                            <field name="sno" readonly="1"/>
+                            <field name="item_code" readonly="1"/>
+                            <field name="item_description" readonly="1"/>
+                            <field name="uom_id" readonly="1"/>
+                            <field name="quantity_issued" readonly="1" sum="Total"/>
+                            <field name="in_mixing" required="1" readonly="parent.state == 'done'"/>
+                            <field name="wastage_kg" readonly="parent.state == 'done'"/>
+                            <field name="wastage_pct" readonly="parent.state == 'done'"/>
+                        </list>
+                    </field>
+
+                    <!-- NEW: Total summary box under the lines -->
+                    <group class="oe_subtotal_footer oe_right" colspan="2">
+                        <field name="total_issued"/>
+                        <field name="total_in_mixing"/>
+                        <field name="total_wastage_kg"/>
+                        <field name="total_wastage_pct" class="oe_subtotal_footer_separator"/>
+                    </group>
+
+                    <field name="mrs_id" invisible="1" force_save="1"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ============ LIST ============ -->
+    <record id="view_mixing_slip_list" model="ir.ui.view">
+        <field name="name">mixing.slip.list</field>
+        <field name="model">mixing.slip</field>
+        <field name="arch" type="xml">
+            <list string="Mixing Slips">
+                <field name="name"/>
+                <field name="date"/>
+                <field name="sale_order_id"/>
+                <field name="customer_name"/>
+                <field name="recipe_product_id"/>
+                <field name="total_bags"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-success="state == 'done'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ============ ACTION ============ -->
+    <record id="action_mixing_slip" model="ir.actions.act_window">
+        <field name="name">Mixing Slips</field>
+        <field name="res_model">mixing.slip</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ============ MENU: inside Manufacturing ============ -->
+    <menuitem id="menu_mixing_slip"
+              name="Mixing Slips"
+              parent="mrp.menu_mrp_root"
+              action="action_mixing_slip"
+              sequence="30"/>
+</odoo>

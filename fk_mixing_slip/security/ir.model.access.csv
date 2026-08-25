@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_mixing_slip_user,mixing.slip.user,model_mixing_slip,base.group_user,1,1,1,1
+access_mixing_slip_line_user,mixing.slip.line.user,model_mixing_slip_line,base.group_user,1,1,1,1

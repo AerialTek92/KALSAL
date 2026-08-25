@@ -1,0 +1,116 @@
+<odoo>
+    <!-- Form View -->
+    <record id="view_line_clearance_form" model="ir.ui.view">
+        <field name="name">line.clearance.form</field>
+        <field name="model">line.clearance</field>
+        <field name="arch" type="xml">
+            <form string="Line Clearance Check Sheet">
+                <header>
+                    <button name="action_confirm" type="object" string="Confirm" class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_draft" type="object" string="Set to Draft" invisible="state != 'confirmed'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,confirmed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>Line Clearance Check Sheet</h1>
+                    </div>
+
+                    <!-- Document Control Header -->
+                    <group string="Document Information">
+                        <group>
+                            <field name="name" readonly="1"/>
+                            <field name="sale_order_id" domain="[('mixing_doc', '!=', False)]"/>
+                            <field name="issue_date"/>
+                            <field name="revision"/>
+                        </group>
+                        <group>
+                            <field name="so_product_ids" invisible="1"/>
+                            <field name="date"/>
+                            <field name="time" placeholder="e.g., 14:30"/>
+                            <field name="user_id"/>
+                        </group>
+                    </group>
+
+                    <separator string="Production Information"/>
+                    <group>
+                        <group>
+                            <field name="product_id" domain="[('id', 'in', so_product_ids)]" placeholder="Select product..."/>
+                            <!-- Batch No now auto-fills immediately after product is selected -->
+                            <field name="batch_no" readonly="1" force_save="1"/>
+                        </group>
+                        <group>
+                            <field name="previous_product_id" placeholder="Select previous product..."/>
+                            <field name="previous_product_removed" widget="radio" options="{'horizontal': true}"/>
+                            <field name="machine_line" placeholder="Enter Machine/Line..."/>
+                        </group>
+                    </group>
+
+                    <!-- Checklist Section -->
+                    <separator string="Clearance Checklist" colspan="4"/>
+                    <group>
+                        <group>
+                            <field name="personal_hygiene_ok" widget="radio" options="{'horizontal': true}"/>
+                            <field name="accessories_ok" widget="radio" options="{'horizontal': true}"/>
+                            <field name="ppe_ok" widget="radio" options="{'horizontal': true}"/>
+                        </group>
+                        <group>
+                            <field name="direct_contact_raw_material_ok" widget="radio" options="{'horizontal': true}"/>
+                            <field name="sealer_properly_clean_ok" widget="radio" options="{'horizontal': true}"/>
+                            <field name="utensil_clean" widget="radio" options="{'horizontal': true}"/>
+                        </group>
+                    </group>
+
+                    <separator string="Remarks" colspan="4"/>
+                    <group>
+                        <field name="remarks" nolabel="1" colspan="4" placeholder="Enter any remarks or observations here..."/>
+                    </group>
+
+                    <!-- Sign-off Section -->
+<!--                    <separator string="Sign-off" colspan="4"/>-->
+<!--                    <group>-->
+<!--                        <group>-->
+<!--                            <field name="operator_signature" widget="signature"/>-->
+<!--                        </group>-->
+<!--                        <group>-->
+<!--                            <field name="supervisor_signature" widget="signature"/>-->
+<!--                        </group>-->
+<!--                    </group>-->
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- list/List View -->
+    <record id="view_line_clearance_list" model="ir.ui.view">
+        <field name="name">line.clearance.list</field>
+        <field name="model">line.clearance</field>
+        <field name="arch" type="xml">
+            <list string="Line Clearances">
+                <field name="name"/>
+                <field name="sale_order_id"/>
+                <field name="date"/>
+                <field name="time"/>
+                <field name="machine_line"/>
+                <field name="product_id"/>
+                <field name="batch_no"/>
+                <field name="user_id"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_line_clearance" model="ir.actions.act_window">
+        <field name="name">Line Clearance</field>
+        <field name="res_model">line.clearance</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create a new Line Clearance Check Sheet
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu Item -->
+    <menuitem id="menu_line_clearance_action" name="Line Clearance" parent="menu_vehicle_inspection_root" action="action_line_clearance" sequence="18"/>
+</odoo>
