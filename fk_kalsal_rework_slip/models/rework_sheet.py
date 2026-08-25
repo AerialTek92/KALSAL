@@ -18,57 +18,37 @@ class KalsalReworkSheet(models.Model):
 
     semi_finished_qc_id = fields.Many2one(
         'semi.finished.qc', string='Failed Semi-Finished QC',
-        domain="[('state', '=', 'failed'), ('is_post_rework_qc', '=', False)]",
+        domain="[('state', '=', 'failed'), ('is_discarded', '=', False)]",
         tracking=True,
         help="Select the failed QC record that requires reworking. "
-             "Post-Rework QCs are excluded: a batch that already went "
-             "through rework and failed again must be discarded.")
-
-    # Guard: never allow selecting a Post-Rework QC for a second rework
-    @api.constrains('semi_finished_qc_id')
-    def _check_no_second_rework(self):
-        for rec in self:
-            if rec.semi_finished_qc_id and rec.semi_finished_qc_id.is_post_rework_qc:
-                raise UserError(_(
-                    "Rework Validation Error:\n"
-                    "QC %s is a Post-Rework QC. A batch that has already "
-                    "been reworked and failed again must be DISCARDED — "
-                    "a second rework is strictly prohibited."
-                ) % rec.semi_finished_qc_id.name)
+             "Discarded QCs (2+ failures) are excluded.")
 
     # ==========================================
-    # NEW: REWORK LIMIT (count-based, simple & reliable)
-    # 1 failed QC  = first failure      -> rework allowed
-    # 2 failed QCs = reworked & failed  -> DISCARDED
+    # REWORK LIMIT COUNTER (The Core Logic)
     # ==========================================
-    def _get_failed_qc_count(self):
-        self.ensure_one()
-        if not (self.sale_order_id and self.product_id):
-            return 0
+    def _get_failed_qc_count(self, so_id, product_id):
+        """How many FAILED Semi-Finished QCs exist for this SO + product."""
         return self.env['semi.finished.qc'].search_count([
-            ('sale_order_id', '=', self.sale_order_id.id),
-            ('product_id', '=', self.product_id.id),
+            ('sale_order_id', '=', so_id),
+            ('product_id', '=', product_id),
             ('state', '=', 'failed'),
         ])
 
     @api.constrains('semi_finished_qc_id')
     def _check_rework_limit(self):
-        """Block generating a rework sheet when the batch is already discarded."""
+        """Server-side backstop: a twice-failed product can never be reworked."""
         for rec in self:
             if not rec.semi_finished_qc_id:
                 continue
-            failed_count = self.env['semi.finished.qc'].search_count([
-                ('sale_order_id', '=', rec.sale_order_id.id),
-                ('product_id', '=', rec.product_id.id),
-                ('state', '=', 'failed'),
-            ])
-            if failed_count >= 2:
+            qc = rec.semi_finished_qc_id
+            count = self._get_failed_qc_count(qc.sale_order_id.id, qc.product_id.id)
+            if count >= 2:
                 raise UserError(_(
                     "Rework Blocked:\n"
-                    "SO %s / %s already has %s failed QCs (original + post-rework). "
-                    "This batch was reworked once and failed again — it must be "
-                    "DISCARDED. A second rework is strictly prohibited."
-                ) % (rec.sale_order_id.name, rec.product_id.display_name, failed_count))
+                    "There are already %s failed QCs for %s (SO %s). "
+                    "A batch that has failed twice is DISCARDED — "
+                    "no further rework is allowed."
+                ) % (count, qc.product_id.display_name, qc.sale_order_id.name))
 
     # ==========================================
     # AUTO-FETCHED FIELDS (ReadOnly)
@@ -144,6 +124,26 @@ class KalsalReworkSheet(models.Model):
             rec.post_rework_qc_count = 1 if rec.post_rework_qc_id else 0
 
     # ==========================================
+    # NEW: REWORK VALUES VALIDATION
+    # All manual fields must be filled and strictly > 0 before confirming
+    # ==========================================
+    def _validate_rework_values(self):
+        self.ensure_one()
+        missing = []
+        checks = [
+            ('rework_qty', 'Rework Quantity'),
+            ('freshly_produced_qty', 'Freshly Produced Quantity'),
+            ('actual_rework_pct', 'Actual Rework Added %'),
+            ('quantity_added', 'Quantity Added'),
+            ('total_batch_qty', 'Total Batch Quantity'),
+        ]
+        for fname, label in checks:
+            value = getattr(self, fname) or 0.0
+            if value <= 0:
+                missing.append('• %s' % label)
+        return missing
+
+    # ==========================================
     # SEQUENCE
     # ==========================================
     @api.model_create_multi
@@ -160,19 +160,25 @@ class KalsalReworkSheet(models.Model):
     def action_confirm_rework(self):
         """Lock the sheet as Passed and auto-redirect to Post-Rework QC."""
         for rec in self:
-            # HARD GATE: only ONE rework allowed per SO + Product
-            failed_count = rec._get_failed_qc_count()
-            if failed_count >= 2:
+            qc = rec.semi_finished_qc_id
+            if qc and self._get_failed_qc_count(qc.sale_order_id.id, qc.product_id.id) >= 2:
                 raise UserError(_(
-                    "Rework Blocked:\n"
-                    "SO %s / %s already has %s failed QCs. This batch was "
-                    "reworked once and failed again — it must be DISCARDED."
-                ) % (rec.sale_order_id.name, rec.product_id.display_name, failed_count))
+                    "Rework Blocked: %s (SO %s) already has 2 failed QCs — "
+                    "the batch is DISCARDED.") % (
+                                    qc.product_id.display_name, qc.sale_order_id.name))
+
+            # HARD GATE: every manual value must be filled and > 0
+            missing = rec._validate_rework_values()
+            if missing:
+                raise UserError(_(
+                    "Rework Validation Error:\n"
+                    "The following fields are mandatory and cannot remain zero "
+                    "before confirming the rework:\n\n%s"
+                ) % '\n'.join(missing))
 
             rec.write({'state': 'passed'})
             rec.message_post(body=_("<b>Rework Check Sheet Passed.</b>"))
 
-            # If a Post-Rework QC already exists, just get its action
             if rec.post_rework_qc_id:
                 action = {
                     'type': 'ir.actions.act_window',
@@ -183,20 +189,16 @@ class KalsalReworkSheet(models.Model):
                     'target': 'current',
                 }
             else:
-                # Create a new one and get its action
                 qc_vals = {
                     'sale_order_id': rec.sale_order_id.id if rec.sale_order_id else False,
                     'product_id': rec.product_id.id if rec.product_id else False,
                     'batch_no': rec.batch_no.id if rec.batch_no else False,
                 }
-
                 new_qc = self.env['semi.finished.qc'].create(qc_vals)
                 rec.write({'post_rework_qc_id': new_qc.id})
-
                 rec.message_post(body=_(
                     "<b>Post-Rework QC Created:</b> %s" % new_qc.name
                 ))
-
                 action = {
                     'type': 'ir.actions.act_window',
                     'name': _('New Post-Rework QC'),
@@ -205,12 +207,9 @@ class KalsalReworkSheet(models.Model):
                     'view_mode': 'form',
                     'target': 'current',
                 }
-
-            # Return the action of the last processed record
             return action
 
     def action_view_failed_qc(self):
-        """Smart button: Open the linked Failed QC form."""
         self.ensure_one()
         if not self.semi_finished_qc_id:
             raise UserError(_('This rework sheet is not linked to any Semi-Finished QC.'))
@@ -224,9 +223,7 @@ class KalsalReworkSheet(models.Model):
         }
 
     def action_create_or_view_post_rework_qc(self):
-        """Smart button: Create a fresh Post-Rework QC or open the existing one."""
         self.ensure_one()
-
         if self.post_rework_qc_id:
             return {
                 'type': 'ir.actions.act_window',
@@ -242,14 +239,9 @@ class KalsalReworkSheet(models.Model):
             'product_id': self.product_id.id if self.product_id else False,
             'batch_no': self.batch_no.id if self.batch_no else False,
         }
-
         new_qc = self.env['semi.finished.qc'].create(qc_vals)
         self.write({'post_rework_qc_id': new_qc.id})
-
-        self.message_post(body=_(
-            "<b>Post-Rework QC Created:</b> %s" % new_qc.name
-        ))
-
+        self.message_post(body=_("<b>Post-Rework QC Created:</b> %s" % new_qc.name))
         return {
             'type': 'ir.actions.act_window',
             'name': _('New Post-Rework QC'),
@@ -267,65 +259,96 @@ class SemiFinishedQCInherit(models.Model):
     _inherit = 'semi.finished.qc'
 
     # ==========================================
-    # DISCARD RULE FLAG
+    # DISCARD FLAG (for views and domains)
     # ==========================================
-    is_post_rework_qc = fields.Boolean(
-        string='Is Post-Rework QC',
-        compute='_compute_is_post_rework_qc',
-        search='_search_is_post_rework_qc',
-        help="True when this QC was generated from a Rework Sheet. "
-             "If a Post-Rework QC fails, the batch is discarded.")
+    is_discarded = fields.Boolean(
+        string='Is Discarded',
+        compute='_compute_is_discarded',
+        search='_search_is_discarded',
+        help="True when this SO+Product has 2 or more failed QCs.")
 
-    def _compute_is_post_rework_qc(self):
+    @api.depends('sale_order_id', 'product_id', 'state')
+    def _compute_is_discarded(self):
         for rec in self:
-            rec.is_post_rework_qc = bool(self.env['kalsal.rework.sheet'].search_count([
-                ('post_rework_qc_id', '=', rec.id),
-            ]))
+            if rec.sale_order_id and rec.product_id:
+                count = self.search_count([
+                    ('sale_order_id', '=', rec.sale_order_id.id),
+                    ('product_id', '=', rec.product_id.id),
+                    ('state', '=', 'failed'),
+                ])
+                rec.is_discarded = count >= 2
+            else:
+                rec.is_discarded = False
 
-    def _search_is_post_rework_qc(self, operator, value):
+    def _search_is_discarded(self, operator, value):
         """Makes the computed flag usable inside domains."""
-        qc_ids = self.env['kalsal.rework.sheet'].search([
-            ('post_rework_qc_id', '!=', False),
-        ]).mapped('post_rework_qc_id').ids
         is_true = value in (True, 'true', 'True', 1)
+        self.env.cr.execute("""
+            SELECT sale_order_id, product_id 
+            FROM semi_finished_qc 
+            WHERE state = 'failed' AND sale_order_id IS NOT NULL AND product_id IS NOT NULL
+            GROUP BY sale_order_id, product_id 
+            HAVING COUNT(id) >= 2
+        """)
+        pairs = self.env.cr.fetchall()
+
+        if not pairs:
+            return [('id', '=', False)] if (operator == '=' and is_true) else [('id', '!=', False)]
+
+        so_ids = [p[0] for p in pairs]
+        prod_ids = [p[1] for p in pairs]
+
+        candidates = self.search([
+            ('sale_order_id', 'in', so_ids),
+            ('product_id', 'in', prod_ids)
+        ])
+
+        valid_ids = [c.id for c in candidates if (c.sale_order_id.id, c.product_id.id) in pairs]
+
         if (operator == '=' and is_true) or (operator == '!=' and not is_true):
-            return [('id', 'in', qc_ids)]
-        return [('id', 'not in', qc_ids)]
+            return [('id', 'in', valid_ids)]
+        else:
+            return [('id', 'not in', valid_ids)]
 
     # ==========================================
     # DROPDOWN FILTER: Hide Failed/Discarded Products
     # ==========================================
-
     @api.depends('sale_order_id')
     def _compute_allowed_recipe_product_ids(self):
-        """Override base compute to hide products locked in the rework lifecycle
-        AND ensure their mixing process is marked as DONE."""
+        """Same rule as the base module: mixing done + not QC'd yet.
+        Draft / In-Progress QCs must NOT hide the product."""
         for rec in self:
             if not rec.sale_order_id:
                 rec.allowed_recipe_product_ids = False
                 continue
 
-            # 1. Get products on the SO
             so_products = rec.sale_order_id.order_line.mapped('product_id')
 
-            # 2. Find products that have a completed Mixing Slip
             mixed_products = self.env['mixing.slip'].search([
                 ('sale_order_id', '=', rec.sale_order_id.id),
-                ('state', '=', 'done')
+                ('state', '=', 'done'),
             ]).mapped('recipe_product_id')
 
-            # 3. Intersect: Mixing MUST be done AND product MUST NOT be blocked by rework lifecycle
+            qcd_products = self.search([
+                ('sale_order_id', '=', rec.sale_order_id.id),
+                ('state', 'in', ('passed', 'failed')),
+            ]).mapped('product_id')
+
             rec.allowed_recipe_product_ids = so_products.filtered(
-                lambda p: p in mixed_products and not rec._is_product_qc_blocked(p)
+                lambda p: p in mixed_products and p not in qcd_products
             )
 
     def _is_product_qc_blocked(self, product):
-        """Block a NEW manual QC for this product when:
-        1. DISCARDED      : a failed Post-Rework QC exists (reworked & failed again).
-        2. OPEN QC        : a draft/in-progress QC already exists (no parallel QCs).
-        3. REWORK PENDING : a failed 1st QC exists and no Post-Rework QC was generated yet.
-        """
         self.ensure_one()
+        # 1. Discarded (2+ failed QCs)
+        count = self.search_count([
+            ('sale_order_id', '=', self.sale_order_id.id),
+            ('product_id', '=', product.id),
+            ('state', '=', 'failed'),
+        ])
+        if count >= 2:
+            return True
+
         qcs = self.search([
             ('sale_order_id', '=', self.sale_order_id.id),
             ('product_id', '=', product.id),
@@ -333,48 +356,64 @@ class SemiFinishedQCInherit(models.Model):
         if not qcs:
             return False
 
-        post_rework_qcs = qcs.filtered('is_post_rework_qc')
-
-        # 1. Discarded batch -> never again (ignore if THIS is the discarded record)
-        if post_rework_qcs.filtered(lambda q: q.state == 'failed' and q.id != self.id):
-            return True
-
-        # 2. An active QC already exists -> no parallel/manual QC (ignore if THIS is the active one)
+        # 2. Active QC exists (no parallel QCs)
         if qcs.filtered(lambda q: q.state in ('draft', 'in_progress') and q.id != self.id):
             return True
 
-        # 3. Failed 1st QC whose rework is not completed yet (ignore if THIS is the failed one)
-        failed_base = qcs.filtered(lambda q: q.state == 'failed' and not q.is_post_rework_qc and q.id != self.id)
-        if failed_base and not post_rework_qcs:
+        # 3. Failed 1st QC waiting for rework
+        failed_qcs = qcs.filtered(lambda q: q.state == 'failed' and q.id != self.id)
+        if failed_qcs:
             return True
 
         return False
 
-    # NOTE: The old _check_discarded_batch_creation constraint has been REMOVED.
-    # It caused false "DISCARDED" blocks during Post-Rework QC creation.
-    # The rework limit is now enforced by the simple failed-QC COUNT in
-    # KalsalReworkSheet._check_rework_limit + action_confirm_rework.
+    # ==========================================
+    # HARD BLOCK: Prevent manual creation for Discarded Batches
+    # ==========================================
+    @api.constrains('sale_order_id', 'product_id')
+    def _check_discarded_batch_creation(self):
+        for rec in self:
+            if not (rec.sale_order_id and rec.product_id):
+                continue
+            # Allow the 2nd failed QC itself to be saved
+            if rec.state == 'failed':
+                continue
+
+            count = self.search_count([
+                ('id', '!=', rec.id),
+                ('sale_order_id', '=', rec.sale_order_id.id),
+                ('product_id', '=', rec.product_id.id),
+                ('state', '=', 'failed'),
+            ])
+            if count >= 2:
+                raise UserError(_(
+                    "QC Creation Blocked:\n"
+                    "%s (SO %s) already has 2 failed QCs — it is DISCARDED; "
+                    "a new QC cannot be created for it."
+                ) % (rec.product_id.display_name, rec.sale_order_id.name))
 
     def action_fail(self):
         res = super().action_fail()
         for rec in self:
-            if rec.is_post_rework_qc:
-                # Second failure -> DISCARD (no rework sheet, no new QC ever)
+            count = self.search_count([
+                ('sale_order_id', '=', rec.sale_order_id.id),
+                ('product_id', '=', rec.product_id.id),
+                ('state', '=', 'failed'),
+            ])
+            if count >= 2:
+                # Second failure -> DISCARD
                 rec.message_post(body=_(
                     "<b>BATCH DISCARDED.</b><br/>"
-                    "The Post-Rework QC has FAILED. This batch has already "
-                    "been reworked once and will NOT be sent for a second "
-                    "rework — it must be discarded."
-                ))
+                    "This is the 2nd failed QC for %s (SO %s). The batch will "
+                    "NOT be sent for a second rework — it must be discarded."
+                ) % (rec.product_id.display_name, rec.sale_order_id.name))
             else:
-                # First failure -> auto-create the Rework Sheet and REDIRECT
+                # First failure -> auto-create Rework Sheet and REDIRECT
                 sheet = self.env['kalsal.rework.sheet'].search([
-                    ('semi_finished_qc_id', '=', rec.id),
-                ], limit=1)
+                    ('semi_finished_qc_id', '=', rec.id)], limit=1)
                 if not sheet:
                     sheet = self.env['kalsal.rework.sheet'].create({
-                        'semi_finished_qc_id': rec.id,
-                    })
+                        'semi_finished_qc_id': rec.id})
                     rec.message_post(body=_(
                         "<b>Rework Check Sheet Created:</b> %s" % sheet.name))
                 return {

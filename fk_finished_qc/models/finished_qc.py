@@ -92,25 +92,42 @@ class FinishedQC(models.Model):
         compute='_compute_allowed_sale_order_ids')
 
     def _compute_allowed_sale_order_ids(self):
-        """Final QC unlocks only when:
-        1. Semi-Finished QC has PASSED, AND
-        2. FG Reporting has been CONFIRMED."""
+        """SO is selectable only if at least one of its products still needs
+        the Final QC (passed SFG + confirmed FG Report + not Final-QC'd)."""
         for rec in self:
-            sfg_sos = self.env['semi.finished.qc'].search([
-                ('state', '=', 'passed'),
-            ]).mapped('sale_order_id')
+            # SO -> products with passed Semi-Finished QC
+            so_passed = {}
+            for qc in self.env['semi.finished.qc'].search([('state', '=', 'passed')]):
+                if qc.sale_order_id:
+                    so_passed.setdefault(qc.sale_order_id.id, set()).add(qc.product_id.id)
 
-            fgr_sos = self.env['fg.reporting'].search([
-                ('state', '=', 'confirmed'),
-            ]).mapped('sale_order_id')
+            # SO -> products included in a confirmed FG Report
+            so_reported = {}
+            for rpt in self.env['fg.reporting'].search([('state', '=', 'confirmed')]):
+                if rpt.sale_order_id:
+                    so_reported.setdefault(
+                        rpt.sale_order_id.id, set()
+                    ).update(rpt.line_ids.mapped('product_id').ids)
 
-            # SO must satisfy BOTH conditions
-            rec.allowed_sale_order_ids = sfg_sos & fgr_sos
+            # SO -> products that already have a completed Final QC
+            so_done = {}
+            for fqc in self.search([('state', 'in', ('passed', 'failed'))]):
+                if fqc.sale_order_id:
+                    so_done.setdefault(fqc.sale_order_id.id, set()).add(fqc.product_id.id)
+
+            allowed = self.env['sale.order']
+            for so_id, passed_ids in so_passed.items():
+                remaining = (passed_ids & so_reported.get(so_id, set())) - so_done.get(so_id, set())
+                if remaining:
+                    allowed |= self.env['sale.order'].browse(so_id)
+            rec.allowed_sale_order_ids = allowed
 
     @api.depends('sale_order_id')
     def _compute_allowed_recipe_product_ids(self):
-        """Only SO products that passed Semi-Finished QC AND are included
-        in a CONFIRMED FG Report."""
+        """Only SO products that:
+        1. passed Semi-Finished QC,
+        2. are included in a CONFIRMED FG Report,
+        3. and have NOT been Final-QC'd yet (no passed/failed Finished QC)."""
         for rec in self:
             if not rec.sale_order_id:
                 rec.allowed_recipe_product_ids = False
@@ -128,8 +145,16 @@ class FinishedQC(models.Model):
                 ('state', '=', 'confirmed'),
             ]).mapped('line_ids.product_id')
 
+            # NEW: products that already have a completed Final QC (passed or failed)
+            done_products = self.search([
+                ('sale_order_id', '=', rec.sale_order_id.id),
+                ('state', 'in', ('passed', 'failed')),
+            ]).mapped('product_id')
+
             rec.allowed_recipe_product_ids = so_products.filtered(
-                lambda p: p in passed_products and p in reported_products
+                lambda p: p in passed_products
+                          and p in reported_products
+                          and p not in done_products
             )
 
     @api.constrains('sale_order_id', 'product_id')

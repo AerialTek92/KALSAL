@@ -11,7 +11,7 @@
     'author': 'Fakhir Khan',
     'category': 'Manufacturing/Production',
     'license': 'LGPL-3',
-    'depends': ['am_kalsal_quality','fk_semi_finished_qc'],
+    'depends': ['am_kalsal_quality','fk_semi_finished_qc', 'fk_fg_reporting'],
     'data': [
         'security/ir.model.access.csv',
         'data/sequence.xml',

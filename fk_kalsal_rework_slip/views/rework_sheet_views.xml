@@ -144,12 +144,12 @@
         <field name="inherit_id" ref="fk_semi_finished_qc.view_semi_finished_qc_form"/>
         <field name="arch" type="xml">
             <xpath expr="//header" position="after">
-                <field name="is_post_rework_qc" invisible="1"/>
+                <!-- CHANGED: is_post_rework_qc -> is_discarded -->
+                <field name="is_discarded" invisible="1"/>
                 <div class="alert alert-danger" role="alert"
-                     invisible="state != 'failed' or not is_post_rework_qc">
+                     invisible="state != 'failed' or not is_discarded">
                     <strong>⚠️ Batch Discarded:</strong>
-                    This Post-Rework QC has failed. The batch has already been
-                    reworked once and must be discarded — no second rework is allowed.
+                    This batch has failed twice and must be discarded — no further rework is allowed.
                 </div>
             </xpath>
         </field>

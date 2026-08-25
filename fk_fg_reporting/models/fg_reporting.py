@@ -45,64 +45,63 @@ class FgReporting(models.Model):
     # GATING: SOs with AT LEAST ONE passed Semi-Finished QC
     # ==========================================
     def _compute_allowed_sale_order_ids(self):
-        """Allow Sale Orders where AT LEAST ONE product has passed Semi-Finished QC."""
+        """Allow SOs that have at least one product which passed
+        Semi-Finished QC AND is not yet in a confirmed FG Report."""
         for rec in self:
-            # 1. Fetch all passed Semi-Finished QCs
-            passed_sfg = self.env['semi.finished.qc'].search([('state', '=', 'passed')])
-
-            so_passed_products = {}
-            for qc in passed_sfg:
+            # SO -> set of passed product ids
+            so_passed = {}
+            for qc in self.env['semi.finished.qc'].search([('state', '=', 'passed')]):
                 if qc.sale_order_id:
-                    so_passed_products.setdefault(qc.sale_order_id.id, set()).add(qc.product_id.id)
+                    so_passed.setdefault(qc.sale_order_id.id, set()).add(qc.product_id.id)
 
-            allowed_sos = self.env['sale.order']
+            # SO -> set of already-reported product ids
+            so_reported = {}
+            for rpt in self.env['fg.reporting'].search([('state', '=', 'confirmed')]):
+                if rpt.sale_order_id:
+                    so_reported.setdefault(
+                        rpt.sale_order_id.id, set()
+                    ).update(rpt.line_ids.mapped('product_id').ids)
 
-            # 2. Allow the SO if it has at least one passed product (No longer requires ALL products)
-            for so_id in so_passed_products.keys():
-                allowed_sos |= self.env['sale.order'].browse(so_id)
-
-            rec.allowed_sale_order_ids = allowed_sos
+            allowed = self.env['sale.order']
+            for so_id, passed_ids in so_passed.items():
+                if passed_ids - so_reported.get(so_id, set()):  # at least one remaining
+                    allowed |= self.env['sale.order'].browse(so_id)
+            rec.allowed_sale_order_ids = allowed
 
     # ==========================================
     # ONCHANGE: auto-build lines ONLY for passed products
     # ==========================================
     @api.onchange('sale_order_id')
     def _onchange_sale_order_id(self):
-        """Auto-build lines ONLY for products that have PASSED Semi-Finished QC."""
-        # 1. Clear existing lines
+        """One line per SO product that has a PASSED Semi-Finished QC and
+        is NOT yet included in a confirmed FG Report."""
         self.line_ids = [(5, 0, 0)]
         if not self.sale_order_id:
             return
 
-        # 2. Find all products for this SO that have PASSED Semi-Finished QC
+        # 1. Products that passed Semi-Finished QC
         passed_products = self.env['semi.finished.qc'].search([
             ('sale_order_id', '=', self.sale_order_id.id),
             ('state', '=', 'passed'),
         ]).mapped('product_id')
 
-        # 3. Filter the SO lines to ONLY include those passed products
-        # (This is where Products B and C get excluded if they haven't passed yet)
-        eligible_so_lines = self.sale_order_id.order_line.filtered(
-            lambda l: l.product_id in passed_products)
+        # 2. NEW: products already reported in a CONFIRMED FG Report for this SO
+        reported_products = self.env['fg.reporting'].search([
+            ('sale_order_id', '=', self.sale_order_id.id),
+            ('state', '=', 'confirmed'),
+        ]).mapped('line_ids.product_id')
 
-        if not eligible_so_lines:
-            return {'warning': {
-                'title': _('No Eligible Products'),
-                'message': _(
-                    'None of the products on Sale Order %s have passed '
-                    'Semi-Finished QC yet. Please complete QC before reporting.'
-                ) % self.sale_order_id.name,
-            }}
+        # 3. Only passed products that are NOT yet reported
+        so_products = self.sale_order_id.order_line.mapped('product_id').filtered(
+            lambda p: p in passed_products and p not in reported_products)
 
-        # 4. Auto-build lines ONLY for the eligible (passed) products
         lines = []
         sno = 1
-
-        for so_line in eligible_so_lines:
-            product = so_line.product_id
-
-            # Calculate quantities (Cartons = SO Qty, Boxes = Cartons * 144)
-            cartons_to_be = int(so_line.product_uom_qty)
+        so_lines = self.sale_order_id.order_line
+        for product in so_products:
+            so_qty = sum(so_lines.filtered(
+                lambda l: l.product_id == product).mapped('product_uom_qty'))
+            cartons_to_be = int(so_qty)
             boxes_to_be = cartons_to_be * 144
 
             lines.append((0, 0, {
@@ -116,6 +115,14 @@ class FgReporting(models.Model):
 
         if lines:
             self.line_ids = lines
+        else:
+            return {'warning': {
+                'title': _('No Eligible Products'),
+                'message': _(
+                    'Sale Order %s has no remaining products to report '
+                    '(every passed product already has a confirmed FG Report).'
+                ) % self.sale_order_id.name,
+            }}
 
     def _fetch_lot_for_product(self, product):
         """Fetch lot from MO first, fallback to newest stock.lot."""

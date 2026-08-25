@@ -108,25 +108,30 @@ class SemiFinishedQC(models.Model):
     # ==========================================
     @api.depends('sale_order_id')
     def _compute_allowed_recipe_product_ids(self):
-        """Fetch products from the selected Sale Order lines, but ONLY those
-        whose mixing process is marked as DONE."""
+        """Products on the SO whose mixing is DONE and that have NOT been
+        QC'd yet. A product counts as QC'd only when its Semi-Finished QC
+        is PASSED or FAILED. Draft / In-Progress QCs do NOT hide it."""
         for rec in self:
             if not rec.sale_order_id:
                 rec.allowed_recipe_product_ids = False
                 continue
 
-            # 1. Get all products on this Sale Order
             so_products = rec.sale_order_id.order_line.mapped('product_id')
 
-            # 2. Find products that have a completed Mixing Slip for this SO
+            # Mixing must be done
             mixed_products = self.env['mixing.slip'].search([
                 ('sale_order_id', '=', rec.sale_order_id.id),
-                ('state', '=', 'done')
-            ]).mapped('recipe_product_id')  # <-- mapped to recipe_product_id
+                ('state', '=', 'done'),
+            ]).mapped('recipe_product_id')
 
-            # 3. Intersect: only allow SO products that have finished mixing
+            # Already QC'd = passed or failed (draft/in-progress don't count)
+            qcd_products = self.search([
+                ('sale_order_id', '=', rec.sale_order_id.id),
+                ('state', 'in', ('passed', 'failed')),
+            ]).mapped('product_id')
+
             rec.allowed_recipe_product_ids = so_products.filtered(
-                lambda p: p in mixed_products
+                lambda p: p in mixed_products and p not in qcd_products
             )
 
     @api.depends('product_id')
