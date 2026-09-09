@@ -1,0 +1,9 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_mrp_bom_rd_user,mrp.bom.rd.user,mrp.model_mrp_bom,rd_module.group_rnd_user,1,1,1,0
+access_mrp_bom_rd_approver,mrp.bom.rd.approver,mrp.model_mrp_bom,rd_module.group_rnd_approver,1,1,1,1
+access_mrp_bom_line_rd_user,mrp.bom.line.rd.user,mrp.model_mrp_bom_line,rd_module.group_rnd_user,1,1,1,0
+access_mrp_bom_line_rd_approver,mrp.bom.line.rd.approver,mrp.model_mrp_bom_line,rd_module.group_rnd_approver,1,1,1,1
+access_product_template_rd_user,product.template.rd.user,product.model_product_template,rd_module.group_rnd_user,1,1,1,0
+access_product_template_rd_approver,product.template.rd.approver,product.model_product_template,rd_module.group_rnd_approver,1,1,1,1
+access_product_product_rd_user,product.product.rd.user,product.model_product_product,rd_module.group_rnd_user,1,1,1,0
+access_product_product_rd_approver,product.product.rd.approver,product.model_product_product,rd_module.group_rnd_approver,1,1,1,1

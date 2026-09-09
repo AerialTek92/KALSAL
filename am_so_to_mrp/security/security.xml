@@ -1,0 +1,26 @@
+<odoo>
+    <data>
+        <!-- 1. Define the Custom App Category -->
+        <record id="module_category_kalsal_budget" model="ir.module.category">
+            <field name="name">KalSal Budget Management</field>
+            <field name="description">Control who can approve production budgets</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <!-- 2. NEW FOR ODOO 19: Define the Privilege Role -->
+        <record id="privilege_kalsal_budget_approver" model="res.groups.privilege">
+            <field name="name">Budget Approver Role</field>
+            <!-- Link this privilege to your category -->
+            <field name="category_id" ref="module_category_kalsal_budget"/>
+        </record>
+
+        <!-- 3. Define the Security Group -->
+        <record id="group_budget_approver" model="res.groups">
+            <field name="name">Budget Approver</field>
+            <!-- Link the group to the privilege instead of the category -->
+            <field name="privilege_id" ref="privilege_kalsal_budget_approver"/>
+            <!-- Inheritance remains the same -->
+<!--            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>-->
+        </record>
+    </data>
+</odoo>

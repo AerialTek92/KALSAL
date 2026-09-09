@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- 1. Record for hiding the BoM smart button on product template -->
+        <record id="rd_view_product_template_form_inherit_bom_hide" model="ir.ui.view">
+            <field name="name">product.template.form.inherit.bom.hide</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="mrp.product_template_form_view_bom_button"/>
+            <field name="arch" type="xml">
+                <xpath expr="//button[@class='oe_stat_button' and @icon='fa-flask']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- 2. Hide the BoM smart button on the PRODUCT VARIANT form (product.product).
+     This is the form that opens when clicking a product from
+     Semi-Finished QC / MRS / Mixing Slip, etc. -->
+        <record id="rd_view_product_product_form_inherit_bom_hide" model="ir.ui.view">
+            <field name="name">product.product.form.inherit.bom.hide</field>
+            <field name="model">product.product</field>
+            <field name="inherit_id" ref="mrp.product_product_form_view_bom_button"/>
+            <field name="arch" type="xml">
+                <xpath expr="//button[@class='oe_stat_button' and @icon='fa-flask']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Clean Layout: Unlocks Edit mode, adds Approval controls, and positions Creation Timestamp -->
+        <record id="mrp_bom_form_view_rnd_workflow" model="ir.ui.view">
+            <field name="name">mrp.bom.form.rnd.workflow</field>
+            <field name="model">mrp.bom</field>
+            <field name="inherit_id" ref="mrp.mrp_bom_form_view"/>
+            <field name="arch" type="xml">
+                <!-- 1. Inject the header layout right before the main sheet container -->
+                <xpath expr="//sheet" position="before">
+                    <header>
+                        <!-- Approve Button: Visible ONLY to Approvers when in draft -->
+                        <button name="action_approve_bom"
+                                string="Approve BoM"
+                                type="object"
+                                class="oe_highlight"
+                                invisible="state != 'draft'"
+                                groups="rd_module.group_rnd_approver"/>
+
+                        <!-- NEW: Reject Button: Placed right beside the approve button, styled bright red -->
+                        <button name="action_reject_bom"
+                                string="Reject BoM"
+                                type="object"
+                                class="btn-danger"
+                                invisible="state != 'draft'"
+                                groups="rd_module.group_rnd_approver"/>
+
+                        <!-- Reset to Draft Button: Visible ONLY to Approvers when approved or rejected -->
+                        <button name="action_reset_to_draft"
+                                string="Reset to Draft"
+                                type="object"
+                                invisible="state == 'draft'"
+                                groups="rd_module.group_rnd_approver"/>
+
+                        <!-- Custom version string number layout tracking alignment -->
+                        <span class="o_form_label ms-3 me-2 font-weight-bold" invisible="not id">Version:</span>
+                        <field name="version" class="oe_inline font-weight-bold me-4" invisible="not id"/>
+
+                        <!-- Status tracker line -->
+                        <field name="state" widget="statusbar" statusbar_visible="draft,approved"/>
+                    </header>
+                </xpath>
+
+                <!-- 2. Target the 'code' (Reference) field on the form sheet and insert the creation timestamp right under it -->
+                <xpath expr="//field[@name='code']" position="after">
+                    <field name="version_date" string="Version Created On" readonly="1"/>
+                </xpath>
+            </field>
+        </record>
+
+
+        <!-- Inherit BoM List View to sort versions cleanly inside our groups and expose the creation timestamp -->
+        <record id="mrp_bom_tree_view_rnd_status" model="ir.ui.view">
+            <field name="name">mrp.bom.list.rnd.status</field>
+            <field name="model">mrp.bom</field>
+            <field name="inherit_id" ref="mrp.mrp_bom_tree_view"/>
+            <field name="arch" type="xml">
+                <!-- Orders groups by name and puts the newest versions on top -->
+                <xpath expr="//list" position="attributes">
+                    <attribute name="default_order">product_tmpl_id asc, id desc</attribute>
+                </xpath>
+
+                <xpath expr="//list" position="inside">
+                    <field name="version" string="Version" optional="show" widget="float"/>
+                    <!-- NEW COLUMN: Displays the exact date and time this specific recipe sandbox variant was created -->
+                    <field name="version_date" string="Created Date &amp; Time" optional="show"/>
+                    <field name="state"
+                           widget="badge"
+                           decoration-danger="state == 'draft'"
+                           decoration-success="state == 'approved'"
+                           decoration-muted="state == 'rejected'"
+                           string="Approval Status"
+                           optional="show"/>
+                </xpath>
+            </field>
+        </record>
+
+
+        <!-- Fully Fixed View: Safely hides helper field and positions Recipe Version right after Product -->
+        <record id="view_order_form_inherit_rd_version" model="ir.ui.view">
+            <field name="name">sale.order.form.inherit.rd.version</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_order_form"/>
+            <field name="arch" type="xml">
+                <!-- Target the description (name) column field to inject elements right before it -->
+                <xpath expr="//page[@name='order_lines']/field[@name='order_line']/list/field[@name='name']"
+                       position="before">
+
+                    <!--
+                        CRUCIAL AUTOMATION FIX:
+                        Using column_invisible="True" tells Odoo's engine to hide the field from human eyes,
+                        but forces the JavaScript layer to load its data so the domain filter works flawlessly!
+                    -->
+                    <field name="product_tmpl_id" column_invisible="True"/>
+
+                    <!-- Your clean, well-positioned dropdown column -->
+                    <field name="bom_id"
+                           string="Recipe Version"
+                           domain="[('product_tmpl_id', '=', product_tmpl_id), ('state', '=', 'approved')]"
+                           options="{'no_create': True, 'no_open': True}"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Inherit BoM Search View to define a Group By Product Template rule -->
+        <record id="view_mrp_bom_filter_rnd_group" model="ir.ui.view">
+            <field name="name">mrp.bom.select.rnd.group</field>
+            <field name="model">mrp.bom</field>
+            <field name="inherit_id" ref="mrp.view_mrp_bom_filter"/>
+            <field name="arch" type="xml">
+                <!-- Target the search view's group panel layout container -->
+                <xpath expr="//group" position="inside">
+                    <!-- This defines the missing group attribute filter link -->
+                    <filter string="Recipe Product Name"
+                            name="group_by_product_template_custom"
+                            context="{'group_by': 'product_tmpl_id'}"/>
+                </xpath>
+
+                <!-- NEW SHORTCUT FILTER: Injects a direct "Rejected Recipes" filter option inside the panel -->
+                <xpath expr="//search" position="inside">
+                    <filter string="Rejected Recipes"
+                            name="filter_rejected_boms"
+                            domain="[('state', '=', 'rejected')]"/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>

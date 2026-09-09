@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="purchase.action_report_purchase_order" model="ir.actions.report">
+        <field name="name">Purchase Order</field>
+        <field name="model">purchase.order</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">am_so_to_mrp.report_purchaseorder_document_kalsal</field>
+        <field name="report_file">am_so_to_mrp.report_purchaseorder_document_kalsal</field>
+        <field name="print_report_name">
+            (object.state in ('draft', 'sent') and 'Request for Quotation - %s' % (object.name) or
+            'Purchase Order - %s' % (object.name))
+        </field>
+        <field name="binding_model_id" ref="purchase.model_purchase_order"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <template id="report_purchaseorder_document_kalsal">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.basic_layout">
+
+                    <!-- Custom CSS for Exact Formatting -->
+                    <style type="text/css">
+                        .page {
+                        font-family: Arial, sans-serif;
+                        font-size: 11px;
+                        color: black;
+                        }
+                        .custom-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-bottom: 15px;
+                        }
+                        .custom-table th, .custom-table td {
+                        border: 1px solid black;
+                        padding: 5px;
+                        text-align: center;
+                        vertical-align: middle;
+                        }
+                        .text-left { text-align: left !important; }
+                        .text-right { text-align: right !important; }
+                        .no-border-top { border-top: none !important; }
+                        .no-border-bottom { border-bottom: none !important; }
+                        .border-right-none { border-right: none !important; }
+                        .border-left-none { border-left: none !important; }
+                    </style>
+
+                    <div class="page">
+
+                        <!-- Header Section -->
+                        <div class="row pb-4">
+                            <div class="col-6">
+                                <img t-if="o.company_id.logo" t-att-src="image_data_uri(o.company_id.logo)"
+                                     style="max-height: 55px;" alt="Logo"/>
+                            </div>
+                            <div class="col-6 text-right">
+                                <!-- Second Logo from specified path -->
+                                <img src="/am_so_to_mrp/static/src/img/second_logo.png"
+                                     style="max-height: 35px; margin-bottom: 5px;" alt="CELAKT"/>
+                                <div style="font-weight: bold; font-size: 14px; margin-top: 5px;">
+                                    <t t-esc="o.company_id.name"/>
+                                </div>
+                                <div style="font-size: 9px; line-height: 1.2;">
+                                    Plot # C-20, Sector 31/A, Mehran Town Extention, Karachi
+                                    <br/>
+                                    Pakistan, tellus@kalsalpk.com Tel:
+                                    <br/>
+                                    +92 21 34551950
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Title and PO Details -->
+                        <h4 style="font-weight: bold; margin-bottom: 5px; color: black;">Purchase Order</h4>
+                        <div class="row">
+                            <div class="col-5">
+                                <table class="custom-table">
+                                    <tr>
+                                        <th style="width: 50%;font-size: 0.80rem;">Date</th>
+                                        <th style="width: 50%;font-size: 0.80rem;">P.O. No.</th>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <t style="font-size: 0.80rem;" t-esc="o.date_order.strftime('%d/%m/%Y') if o.date_order else ''"/>
+                                        </td>
+                                        <td>
+                                            <t style="font-size: 0.80rem;" t-esc="o.name"/>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-2"></div>
+                            <div class="col-5">
+                                <!-- ISO Form Numbers -->
+                                <table class="custom-table" style="margin-top: 25px; font-size: 9px;">
+                                    <tr>
+                                        <td class="text-left" style="padding: 3px 5px;font-size: 0.80rem;">KPL-FS-PR-29-FM-06</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-left" style="padding: 3px 5px;font-size: 0.80rem;">Issue Date: 01-06-2025</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-left" style="padding: 3px 5px; font-size: 0.80rem;">Rev 02</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <br/>
+                        <br/>
+
+                        <!-- Vendor and Ship To -->
+                        <div class="row">
+                            <div class="col-5">
+                                <table class="custom-table">
+                                    <tr>
+                                        <th class="text-left">Vendor</th>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-left" style="height: 75px; vertical-align: top; font-size: 0.80rem;">
+                                            <t t-esc="o.partner_id.name"/>
+                                            <br/>
+                                            <t t-esc="o.partner_id.street"/>
+                                            <t t-esc="o.partner_id.city"/>
+                                            <br/>
+                                            NTN #
+                                            <t t-esc="o.partner_id.vat"/>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-1"></div>
+                            <div class="col-6">
+                                <table class="custom-table">
+                                    <tr>
+                                        <th class="text-left">Ship To</th>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-left" style="height: 75px; vertical-align: top;font-size: 0.80rem;">
+                                            <t t-esc="o.company_id.name"/>
+                                            <br/>
+                                            <t t-esc="o.company_id.street"/>
+                                            <t t-esc="o.company_id.city"/>
+                                            <br/>
+                                            NTN # 9672510-3
+                                            <br/>
+                                            STRN # 02-02-21-06-001-37
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <br/>
+                        <br/>
+
+                        <!-- Terms -->
+                        <div class="row">
+                            <div class="col-6">
+                                <table class="custom-table">
+                                    <tr>
+                                        <th style="width: 50%;">Terms</th>
+                                        <th style="width: 50%;">Due Date</th>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <t t-esc="o.payment_term_id.name or '30 Days'"/>
+                                        </td>
+                                        <td>
+                                            <t t-esc="o.date_planned.strftime('%d/%m/%Y') if o.date_planned else ''"/>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <br/>
+                        <br/>
+
+                        <!-- Main Order Lines -->
+                        <table class="custom-table" style="margin-bottom: 5px;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 35%;">Item Description</th>
+                                    <th style="width: 15%;">QTY</th>
+                                    <th style="width: 10%;">U/M</th>
+                                    <th style="width: 12%;">Rate</th>
+                                    <th style="width: 8%;" class="border-right-none"></th>
+                                    <th style="width: 20%;" class="border-left-none">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Loop over lines -->
+                                <t t-foreach="o.order_line" t-as="line">
+                                    <tr>
+                                        <td class="text-left no-border-bottom no-border-top">
+                                            <t t-esc="line.name"/>
+                                        </td>
+                                        <td class="text-right no-border-bottom no-border-top">
+                                            <t t-esc="line.product_qty"
+                                               t-options='{"widget": "float", "precision": 2}'/>
+                                        </td>
+                                        <!-- FIXED: product_uom.name changed to product_uom_id.name -->
+                                        <td class="no-border-bottom no-border-top">
+                                            <t t-esc="line.product_uom_id.name"/>
+                                        </td>
+                                        <td class="text-right no-border-bottom no-border-top">
+                                            <t t-esc="line.price_unit" t-options='{"widget": "float", "precision": 2}'/>
+                                        </td>
+                                        <td class="text-left no-border-bottom no-border-top border-right-none">
+                                            <t t-esc="o.currency_id.name"/>
+                                        </td>
+                                        <td class="text-right no-border-bottom no-border-top border-left-none">
+                                            <t t-esc="line.price_subtotal"
+                                               t-options='{"widget": "float", "precision": 2}'/>
+                                        </td>
+                                    </tr>
+                                </t>
+
+                                <!-- Taxes -->
+                                <tr>
+                                    <td class="text-left no-border-bottom no-border-top" style="padding-top: 20px;">
+                                        Input Sales Tax 18%
+                                    </td>
+                                    <td class="no-border-bottom no-border-top"></td>
+                                    <td class="no-border-bottom no-border-top"></td>
+                                    <td class="no-border-bottom no-border-top"></td>
+                                    <td class="text-left no-border-bottom no-border-top border-right-none"
+                                        style="padding-top: 20px;">
+                                        <t t-if="o.amount_tax > 0">
+                                            <t t-esc="o.currency_id.name"/>
+                                        </t>
+                                    </td>
+                                    <td class="text-right no-border-bottom no-border-top border-left-none"
+                                        style="padding-top: 20px;">
+                                        <t t-if="o.amount_tax > 0">
+                                            <t t-esc="o.amount_tax" t-options='{"widget": "float", "precision": 0}'/>
+                                        </t>
+                                    </td>
+                                </tr>
+
+                                <!-- Empty Spacer Row to push bottom border down -->
+                                <tr>
+                                    <td class="no-border-top" style="height: 250px;"></td>
+                                    <td class="no-border-top"></td>
+                                    <td class="no-border-top"></td>
+                                    <td class="no-border-top"></td>
+                                    <td class="no-border-top border-right-none"></td>
+                                    <td class="no-border-top border-left-none"></td>
+                                </tr>
+                            </tbody>
+                            <!-- Total Footer Row -->
+                            <tfoot>
+                                <tr>
+                                    <th colspan="4" class="text-right" style="font-size: 13px;">Total</th>
+                                    <th class="text-left border-right-none" style="font-weight: bold; font-size: 13px;">
+                                        <t t-esc="o.currency_id.name"/>
+                                    </th>
+                                    <th class="text-right border-left-none" style="font-weight: bold; font-size: 13px;">
+                                        <t t-esc="o.amount_total" t-options='{"widget": "float", "precision": 2}'/>
+                                    </th>
+                                </tr>
+                            </tfoot>
+                        </table>
+
+                        <!-- Instructions/Notes -->
+                        <div style="font-size: 10px; margin-top: 15px;">
+                            <b>Note:</b>
+                            <ol style="padding-left: 15px; margin-top: 5px; line-height: 1.4;">
+                                <li>Please ensure the goods are delivered before 4:00 PM on the scheduled delivery
+                                    date.
+                                </li>
+                                <li>Kindly arrange and send unloading labour along with the delivery.</li>
+                                <li>Any damage or discrepancy must be reported immediately upon delivery</li>
+                                <li>Please send the Delivery Challan, Halal Certificate, and Certificate of Analysis
+                                    (COA) along with the delivery.
+                                    <br/>
+                                    without these documents, we will not be able to proceed with the order
+                                </li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <!-- Page Footer (Repeats on every page) -->
+                    <div class="footer"
+                         style="font-size: 9px; font-weight: bold; text-align: left; font-family: Arial, sans-serif;">
+                        KalSal runs on in-house ERP, Business Broadcast (R) BB. The document does not require sinagture.
+                        '"KalSal-CELAKT-Montu-Baymisl-Roots" brands are owned by KalSal
+                    </div>
+
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Use noupdate="1" so modifications made by users in the UI are preserved during updates -->
+    <data noupdate="1">
+
+        <!-- Cron Job: Check Delay Overdue Daily -->
+        <record id="ir_cron_qc_delay_check" model="ir.cron">
+            <field name="name">Quality Check: Delay Period Overdue Notification</field>
+            <field name="model_id" ref="model_kalsal_quality_check"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_check_delay_overdue()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <!-- Starts running immediately from today's system baseline clock -->
+            <field name="nextcall" eval="(datetime.now()).strftime('%Y-%m-%d 00:00:00')"/>
+            <field name="active" eval="True"/>
+        </record>
+
+    </data>
+</odoo>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Microbiological checkbox column on the product's FG tab.
+         We inherit the BASE product form with a high priority, so this
+         xpath runs AFTER am_kalsal_quality has added the fg_specs tab —
+         no need to know am_kalsal_quality's view id. -->
+    <record id="view_product_template_form_fg_micro" model="ir.ui.view">
+        <field name="name">product.template.form.fg.micro.checkbox</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='fg_specs']//field[@name='condition']"
+                   position="after">
+                <field name="is_microbiological"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

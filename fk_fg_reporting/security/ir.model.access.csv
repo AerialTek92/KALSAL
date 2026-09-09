@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_fg_reporting_user,fg.reporting.user,model_fg_reporting,base.group_user,1,1,1,1
+access_fg_reporting_line_user,fg.reporting.line.user,model_fg_reporting_line,base.group_user,1,1,1,1

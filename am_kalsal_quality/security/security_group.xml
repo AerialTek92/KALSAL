@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- 1. Define the Module Category Heading -->
+        <record id="module_category_quality" model="ir.module.category">
+            <field name="name">Quality Control</field>
+            <field name="sequence">20</field>
+        </record>
+
+        <!-- ================= PRIVILEGES ================= -->
+
+        <!-- Privilege Container for full processing users -->
+        <record id="res_groups_privilege_quality_user" model="res.groups.privilege">
+            <field name="name">Quality Access Level</field>
+            <field name="sequence">10</field>
+            <field name="category_id" ref="module_category_quality"/>
+        </record>
+
+        <!-- Privilege Container for read-only viewing users -->
+        <record id="res_groups_privilege_quality_viewer" model="res.groups.privilege">
+            <field name="name">Quality View Access</field>
+            <field name="sequence">20</field>
+            <field name="category_id" ref="module_category_quality"/>
+        </record>
+
+
+        <!-- ================= SECURITY GROUPS ================= -->
+
+        <!-- Standard Quality User Group (Can perform clearances) -->
+        <record id="group_quality_user" model="res.groups">
+            <field name="name">Officer: Process Clearances</field>
+            <field name="privilege_id" ref="res_groups_privilege_quality_user"/>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+            <field name="comment">Users with this role can process line clearances and view quality slips.</field>
+        </record>
+
+        <!-- NEW: Quality Viewer Group (Read-Only) -->
+        <record id="group_quality_viewer" model="res.groups">
+            <field name="name">Auditor: Read-Only Slips</field>
+            <field name="privilege_id" ref="res_groups_privilege_quality_viewer"/>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+            <field name="comment">Users with this role can only view quality documents and logs without making changes.</field>
+        </record>
+
+    </data>
+</odoo>

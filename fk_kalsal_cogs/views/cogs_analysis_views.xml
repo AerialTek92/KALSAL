@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- COGS Analysis Form View -->
+    <record id="view_cogs_sales_analysis_form" model="ir.ui.view">
+        <field name="name">cogs.sales.analysis.form</field>
+        <field name="model">cogs.sales.analysis</field>
+        <field name="arch" type="xml">
+            <form string="COGS Analysis">
+                <header>
+                    <button name="action_compute_cogs" string="Compute COGS" type="object"
+                            class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_lock" string="Lock Analysis" type="object"
+                            class="btn-warning" invisible="state != 'computed'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,computed,locked"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+
+                    <!-- Smart Button for POs -->
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_purchase_orders"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-shopping-cart"
+                                invisible="purchase_order_count == 0">
+                            <field name="purchase_order_count" widget="statinfo" string="Purchase Orders"/>
+                        </button>
+                    </div>
+
+                    <group>
+                        <group>
+                            <field name="sale_order_id" readonly="state != 'draft'"/>
+                            <field name="partner_id" readonly="1"/>
+                            <field name="po_names_display" readonly="1" invisible="purchase_order_count == 0"/>
+                        </group>
+                        <group>
+                            <field name="budget_id" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <group class="oe_subtotal_footer">
+                        <field name="total_forecasted_cost" class="oe_subtotal_footer_separator"/>
+                        <field name="total_actual_cost" class="oe_subtotal_footer_separator"/>
+                        <field name="total_variance" class="oe_subtotal_footer_separator"
+                               decoration-success="total_variance >= 0" decoration-danger="total_variance &lt; 0"/>
+                    </group>
+
+                    <notebook>
+                        <page string="Finished Products &amp; Raw Materials">
+                            <field name="fg_line_ids">
+                                <list editable="bottom">
+                                    <field name="finished_good_id" readonly="1"/>
+                                    <field name="mo_id" readonly="1" optional="hide"/>
+                                    <field name="forecasted_total" readonly="1"/>
+                                    <field name="actual_total" readonly="1"/>
+                                    <field name="variance" readonly="1"
+                                           decoration-success="variance >= 0" decoration-danger="variance &lt; 0"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- COGS Analysis List View -->
+    <record id="view_cogs_sales_analysis_list" model="ir.ui.view">
+        <field name="name">cogs.sales.analysis.list</field>
+        <field name="model">cogs.sales.analysis</field>
+        <field name="arch" type="xml">
+            <list string="COGS Analysis">
+                <field name="name"/>
+                <field name="sale_order_id"/>
+                <field name="partner_id"/>
+                <field name="total_forecasted_cost"/>
+                <field name="total_actual_cost"/>
+                <field name="total_variance" decoration-success="total_variance >= 0"
+                       decoration-danger="total_variance &lt; 0"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Action Definition -->
+    <record id="action_cogs_sales_analysis" model="ir.actions.act_window">
+        <field name="name">COGS Analysis</field>
+        <field name="res_model">cogs.sales.analysis</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- PERFECT TOP NAV BAR PLACEMENT FOR YOUR INSTANCE -->
+    <!-- Using the verified parent ID and sequence 55 sits it perfectly next to Reporting -->
+    <menuitem id="menu_kalsal_cogs_accounting_topbar"
+              name="COGS &amp; Budget"
+              parent="accountant.menu_accounting"
+              action="action_cogs_sales_analysis"
+              sequence="55"/>
+</odoo>
+
+

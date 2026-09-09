@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add "Incoming (Free)" column to MO Components tab -->
+    <record id="view_mrp_production_form_inherit_unbound" model="ir.ui.view">
+        <field name="name">mrp.production.form.inherit.unbound</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="am_so_to_mrp.view_mrp_production_form_inherit_combined"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='move_raw_ids']/list/field[@name='x_items_short']" position="after">
+                <field name="x_unbound_incoming_qty"
+                       string="Incoming (quantity)"
+                       decoration-success="x_unbound_incoming_qty > 0"
+                       readonly="1"/>
+                <field name="x_unbound_incoming_desc"
+                       string="Pending PO"
+                       readonly="1"
+                       optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Global Parameters: Editable List View Only (No Form View) -->
+    <record id="view_kalsal_quality_parameter_tree" model="ir.ui.view">
+        <field name="name">kalsal.quality.parameter.list</field>
+        <field name="model">kalsal.quality.parameter</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <!--                <field name="category"/>-->
+                <field name="default_condition"/>
+                <field name="default_specification"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_kalsal_quality_parameter" model="ir.actions.act_window">
+        <field name="name">Quality Parameters</field>
+        <field name="res_model">kalsal.quality.parameter</field>
+        <field name="view_mode">list</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create a new quality parameter
+            </p>
+            <p>These global parameters can be linked to products for quality testing.</p>
+        </field>
+    </record>
+
+    <!-- 1. ADD THE MISSING ROOT MENU HERE -->
+    <!--    <menuitem id="menu_kalsal_quality_root"-->
+    <!--              name="Quality"-->
+    <!--              sequence="20"/>-->
+
+    <!-- 2. Configuration Sub-Menu -->
+    <menuitem id="menu_kalsal_quality_config_root"
+              name="Configuration"
+              parent="menu_vehicle_inspection_root"
+              sequence="99"/>
+
+    <!-- 3. Quality Parameters Action Menu -->
+    <menuitem id="menu_kalsal_quality_parameter"
+              name="Quality Parameters"
+              parent="menu_kalsal_quality_config_root"
+              action="action_kalsal_quality_parameter"
+              sequence="10"/>
+
+    <!-- Inherit Product Form View to add Parameters Tab -->
+    <record id="product_template_form_quality_parameters" model="ir.ui.view">
+        <field name="name">product.template.form.quality.parameters</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='type']" position="after">
+                <field name="product_type_custom" string="Category Type"/>
+            </xpath>
+
+            <!-- Correctly target categ_id using a precise XPath expression -->
+            <xpath expr="//field[@name='categ_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+
+            <xpath expr="//notebook" position="inside">
+                <page string="Raw Material QC Parameters" name="quality_parameters" invisible="product_type_custom == 'finished'">
+                    <field name="quality_param_line_ids">
+                        <list editable="bottom">
+                            <field name="sequence" widget="handle"/>
+                            <field name="parameter_id"/>
+                            <field name="condition"/>
+                            <field name="specification"/>
+                            <field name="delay_required"/>
+                        </list>
+                    </field>
+                </page>
+                <page string="Semi Finished Goods QC Parameters" name="semi_finished_quality_parameters" invisible="product_type_custom == 'raw'">
+                    <field name="semi_fg_specs">
+                        <list editable="bottom">
+                            <field name="sequence" widget="handle"/>
+                            <field name="parameter_id"/>
+                            <field name="condition"/>
+                            <field name="specification"/>
+                            <field name="delay_required"/>
+                        </list>
+                    </field>
+                </page>
+                <page string="Finished Goods QC Parameters" name="finished_quality_parameters" invisible="product_type_custom == 'raw'">
+                    <field name="fg_specs">
+                        <list editable="bottom">
+                            <field name="sequence" widget="handle"/>
+                            <field name="parameter_id"/>
+                            <field name="condition"/>
+                            <field name="specification"/>
+                            <field name="delay_required"/>
+                        </list>
+                    </field>
+                </page>
+
+                <page string="Colors" name="colors">
+                    <field name="color_parameter_ids">
+                        <list editable="bottom">
+                            <field name="name"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

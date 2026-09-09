@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_semi_finished_qc_user,semi.finished.qc.user,model_semi_finished_qc,base.group_user,1,1,1,1
+access_semi_finished_qc_line_user,semi.finished.qc.line.user,model_semi_finished_qc_line,base.group_user,1,1,1,1

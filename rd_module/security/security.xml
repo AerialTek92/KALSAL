@@ -1,0 +1,32 @@
+<odoo>
+    <data>
+        <!-- 1. Define the Custom App Category with a clean, text-only name -->
+        <record id="module_category_rnd" model="ir.module.category">
+            <field name="name">Research and Development</field>
+            <field name="description">Helps manage R and D access rights.</field>
+            <field name="sequence">20</field>
+        </record>
+
+        <!-- 2. Define the Privilege Roles for R&D -->
+        <record id="privilege_rnd_user" model="res.groups.privilege">
+            <field name="name">User</field>
+            <field name="category_id" ref="module_category_rnd"/>
+        </record>
+
+        <record id="privilege_rnd_approver" model="res.groups.privilege">
+            <field name="name">Approver</field>
+            <field name="category_id" ref="module_category_rnd"/>
+        </record>
+
+        <!-- 3. Define the Security Groups linked to the Privileges -->
+        <record id="group_rnd_user" model="res.groups">
+            <field name="name">R and D User</field>
+            <field name="privilege_id" ref="privilege_rnd_user"/>
+        </record>
+
+        <record id="group_rnd_approver" model="res.groups">
+            <field name="name">R and D Approver</field>
+            <field name="privilege_id" ref="privilege_rnd_approver"/>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Inherited MRS form: adds the "Mixing Slip" next-step smart button.
+         Lives in fk_mixing_slip; kalsal_pr_slip files remain untouched. -->
+    <record id="view_mrs_form_inherit_mixing_button" model="ir.ui.view">
+        <field name="name">material.requisition.slip.form.inherit.mixing</field>
+        <field name="model">material.requisition.slip</field>
+        <field name="inherit_id" ref="kalsal_pr_slip.view_material_requisition_slip_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <!-- Hidden field so the invisible condition can read it -->
+                <field name="picking_done" invisible="1"/>
+
+                <button name="action_open_mixing_slip"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-cutlery"
+                        invisible="not picking_done">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Mixing Slip</span>
+                    </div>
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

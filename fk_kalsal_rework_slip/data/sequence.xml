@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="seq_rework_sheet" model="ir.sequence">
+        <field name="name">Rework Sheet Sequence</field>
+        <field name="code">rework.sheet</field>
+        <field name="prefix">RW/%(year)s/</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
+</odoo>

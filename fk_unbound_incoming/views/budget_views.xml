@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add "Incoming (Free)" and "Net Exposure" to Budget Product Lines -->
+    <record id="view_custom_budget_form_inherit_unbound" model="ir.ui.view">
+        <field name="name">custom.budget.form.inherit.unbound</field>
+        <field name="model">custom.budget</field>
+        <field name="inherit_id" ref="am_so_to_mrp.view_custom_budget_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_line_ids']/list/field[@name='subtotal']" position="after">
+                <field name="unbound_incoming_qty"
+                       string="Incoming (quantity)"
+                       decoration-success="unbound_incoming_qty > 0"/>
+                <field name="unbound_incoming_desc"
+                       string="Pending PO"
+                       optional="show"/>
+                <field name="net_exposure"
+                       string="Net Exposure"
+                       decoration-danger="net_exposure > 0"
+                       decoration-success="net_exposure == 0"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

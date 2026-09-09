@@ -1,0 +1,153 @@
+<odoo>
+    <!-- Form View -->
+    <record id="view_vehicle_inspection_form" model="ir.ui.view">
+        <field name="name">vehicle.inspection.form</field>
+        <field name="model">vehicle.inspection</field>
+        <field name="arch" type="xml">
+            <form string="Vehicle Inspection Report">
+                <header>
+                    <button name="action_complete_inspection" string="Pass" type="object" class="btn-success"
+                            invisible="state != 'draft'"/>
+                    <button name="action_reset" string="Reset To Draft" type="object"
+                            invisible="state == 'draft'"/>
+                    <button name="action_fail_inspection" string="Fail" type="object" class="btn-danger"
+                            invisible="state != 'draft'"/>
+                    <button name="action_cancel" string="Cancel" type="object"
+                            invisible="state in ('done', 'cancelled')"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_picking"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-truck"
+                                invisible="not picking_id">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_text">Transfer</span>
+                            </div>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+
+                    <group string="Shipment Details">
+                        <group>
+                            <field name="vehicle_id"/>
+                            <field name="partner_id"/>
+                            <field name="material_name" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="inspection_date"/>
+                            <field name="inspector_id"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Inspection Checklist">
+                            <group string="Checks">
+                                <group>
+                                    <field name="check_dust_dirt"/>
+                                    <field name="check_suspicious_items"/>
+                                </group>
+                                <group>
+                                    <field name="check_unusual_odor"/>
+                                    <field name="check_oil_spills"/>
+                                </group>
+                            </group>
+
+                            <group string="Notifications">
+                                <!-- Alert takes the entire row -->
+                                <div colspan="2" class="alert alert-warning" role="alert">
+                                    If any of the above is YES, notify the supervisor immediately.
+                                </div>
+                                <!-- Remarks label and input field side by side taking the full row -->
+                                <div colspan="2" class="d-flex align-items-center mb-2">
+                                    <label for="remarks" string="Remarks / Notes" class="me-2"
+                                           style="font-weight: bold;"/>
+                                    <field name="remarks" nolabel="1" placeholder="Enter remarks here..."
+                                           class="flex-grow-1"/>
+                                </div>
+                            </group>
+                        </page>
+                    </notebook>
+
+                    <!-- Signature Section -->
+                    <group string="Signatures">
+                        <group>
+                            <field name="inspector_id" string="Inspected By" readonly="state != 'draft'"/>
+                        </group>
+                        <group>
+                            <field name="reviewed_by" string="Reviewed By" readonly="state != 'draft'"/>
+                        </group>
+                    </group>
+
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- List View -->
+    <record id="view_vehicle_inspection_list" model="ir.ui.view">
+        <field name="name">vehicle.inspection.list</field>
+        <field name="model">vehicle.inspection</field>
+        <field name="arch" type="xml">
+            <list string="Vehicle Inspections">
+                <field name="name"/>
+                <field name="inspection_date"/>
+                <field name="vehicle_id"/>
+                <field name="partner_id"/>
+                <field name="material_name"/>
+                <field name="inspector_id"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_vehicle_inspection_search" model="ir.ui.view">
+        <field name="name">vehicle.inspection.search</field>
+        <field name="model">vehicle.inspection</field>
+        <field name="arch" type="xml">
+            <search string="Search Vehicle Inspections">
+                <field name="name"/>
+                <field name="vehicle_id"/>
+                <field name="partner_id"/>
+                <filter string="Draft" name="filter_draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Completed" name="filter_done" domain="[('state', '=', 'done')]"/>
+                <separator/>
+                <filter string="Vehicle" name="groupby_vehicle" context="{'group_by': 'vehicle_id'}"/>
+                <filter string="Status" name="groupby_state" context="{'group_by': 'state'}"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_vehicle_inspection" model="ir.actions.act_window">
+        <field name="name">Vehicle Inspections</field>
+        <field name="res_model">vehicle.inspection</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_vehicle_inspection_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create a new vehicle inspection record.
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu Item -->
+    <menuitem id="menu_vehicle_inspection_root"
+              name="Quality Inspections"
+              web_icon="am_kalsal_quality,static/description/icon.png"
+              sequence="15"/>
+
+    <menuitem id="menu_vehicle_inspection_all"
+              name="All Inspections"
+              parent="menu_vehicle_inspection_root"
+              action="action_vehicle_inspection"
+              sequence="10"/>
+</odoo>

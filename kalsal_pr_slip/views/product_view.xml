@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_lot_by_location_list" model="ir.ui.view">
+        <field name="name">stock.quant.lot.by.location.list</field>
+        <field name="model">stock.quant</field>
+        <field name="arch" type="xml">
+            <list string="Lots by Location" create="false" edit="false" delete="false">
+                <field name="lot_id"/>
+                <field name="location_id"/>
+                <field name="quantity"/>
+                <field name="reserved_quantity"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_lot_by_location_kanban" model="ir.ui.view">
+        <field name="name">stock.quant.lot.by.location.kanban</field>
+        <field name="model">stock.quant</field>
+        <field name="arch" type="xml">
+            <kanban create="false" default_group_by="location_id">
+                <field name="lot_id"/>
+                <field name="location_id"/>
+                <field name="quantity"/>
+                <field name="product_id"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="oe_kanban_global_click">
+                            <strong>
+                                <field name="lot_id"/>
+                            </strong>
+                            <div>
+                                <field name="quantity"/>
+                                <span> Qty</span>
+                                <br/>
+                                <field name="product_id"/>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_lot_by_location_search" model="ir.ui.view">
+        <field name="name">stock.quant.lot.by.location.search</field>
+        <field name="model">stock.quant</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="lot_id"/>
+                <field name="location_id"/>
+                <filter string="Group by Location" name="groupby_location" context="{'group_by': 'location_id'}"/>
+                <filter string="Group by Lot" name="groupby_lot" context="{'group_by': 'lot_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="product_template_form_lot_location_button" model="ir.ui.view">
+        <field name="name">product.template.form.lot.location.button</field>
+        <field name="model">product.template</field>
+        <!-- Updated with the trailing "_button" -->
+        <field name="inherit_id" ref="stock.product_template_form_view_procurement_button"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_open_product_lot']" position="replace">
+                <button name="action_view_lots_by_location" type="object"
+                        class="oe_stat_button" icon="fa-cubes"
+                        invisible="not lot_location_count">
+                    <field name="lot_location_count" widget="statinfo" string="Lots/Loc"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
