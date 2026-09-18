@@ -28,12 +28,20 @@ class SemiFinishedQC(models.Model):
         'product.product', string='Product Name', tracking=True,
         domain="[('id', 'in', allowed_recipe_product_ids)]")
 
-    product_category = fields.Selection([
-        ('recipe_mixes', 'Recipe Mixes'),
-        ('plain_spices', 'Plain Spices'),
-        ('powdered_desserts', 'Powdered Desserts'),
-    ], string='Product Category', tracking=True,
-        help="Classification of the tested product (per the FG Test Report header).")
+    semi_product_id = fields.Many2one(
+        'product.product', related='product_id.product_tmpl_id.semi_product_id', string='Product Name', tracking=True,
+        domain="[('id', 'in', allowed_recipe_product_ids)]")
+
+    product_category = fields.Selection(
+        selection=[
+            ('recipe_mixes', 'Recipe Mixes'),
+            ('plain_spices', 'Plain Spices'),
+            ('powdered_desserts', 'Powdered Desserts'),
+        ],
+        string='Recipe Category',
+        related='product_id.product_tmpl_id.recipe_category',
+        readonly=True, store=False,
+        help="Decided on the product master - read-only here.")
 
     allowed_recipe_product_ids = fields.Many2many(
         'product.product',
@@ -110,13 +118,15 @@ class SemiFinishedQC(models.Model):
         compute='_compute_allowed_sale_order_ids')
 
     def _compute_allowed_sale_order_ids(self):
-        """SO becomes selectable only after its Line Clearance sheet
-        is confirmed AND it has mixed-but-not-QC'd quantity available."""
+        """SO becomes selectable as soon as one of its Mixing Slips is DONE
+        AND it has mixed-but-not-QC'd quantity available.
+        Line Clearance no longer gates this dropdown."""
         for rec in self:
-            confirmed_clearances = self.env['line.clearance'].search([
-                ('state', '=', 'confirmed'),
+            done_slips = self.env['mixing.slip'].search([
+                ('state', '=', 'done'),
+                ('sale_order_id', '!=', False),
             ])
-            candidate_sos = confirmed_clearances.mapped('sale_order_id')
+            candidate_sos = done_slips.mapped('sale_order_id')
 
             allowed = self.env['sale.order']
             for so in candidate_sos:
@@ -137,12 +147,12 @@ class SemiFinishedQC(models.Model):
                 continue
             rec.allowed_recipe_product_ids = rec._eligible_products(rec.sale_order_id)
 
-    @api.depends('product_id')
+    @api.depends('semi_product_id')
     def _compute_allowed_color_ids(self):
         """Fetch colors defined on the selected product's Colors tab"""
         for rec in self:
-            if rec.product_id:
-                rec.allowed_color_ids = rec.product_id.product_tmpl_id.color_parameter_ids
+            if rec.semi_product_id:
+                rec.allowed_color_ids = rec.semi_product_id.product_tmpl_id.color_parameter_ids
             else:
                 rec.allowed_color_ids = False
 
@@ -154,6 +164,7 @@ class SemiFinishedQC(models.Model):
         """Clear downstream fields when the Sale Order changes."""
         if self.sale_order_id:
             self.product_id = False
+            self.semi_product_id = False
             self.batch_no = False
             self.line_ids = [(5, 0, 0)]
             self.qty_to_qc = 0.0
@@ -320,11 +331,11 @@ class SemiFinishedQC(models.Model):
 
     def _load_default_parameters(self):
         self.ensure_one()
-        if not self.product_id:
+        if not self.semi_product_id:
             return
 
         lines = []
-        for param_line in self.product_id.product_tmpl_id.semi_fg_specs:
+        for param_line in self.semi_product_id.product_tmpl_id.semi_fg_specs:
             lines.append((0, 0, {
                 'parameter_id': param_line.parameter_id.id,
                 'specification': param_line.specification or param_line.parameter_id.default_specification,
@@ -342,7 +353,7 @@ class SemiFinishedQC(models.Model):
                 raise UserError(_(
                     "Parameters can only be reloaded while the QC is "
                     "Draft or In Progress."))
-            if not rec.product_id:
+            if not rec.semi_product_id:
                 raise UserError(_("Select a Product before reloading parameters."))
 
             # Clear existing lines completely

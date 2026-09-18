@@ -68,6 +68,13 @@
                     </header>
                 </xpath>
 
+                <xpath expr="//field[@name='product_tmpl_id']" position="attributes">
+                    <!-- Wires your domain securely using standard syntax -->
+                    <attribute name="domain">[('product_type_custom', 'in', ['finished', 'semi'])]</attribute>
+                    <!-- Clears any overriding default search types if necessary -->
+                    <attribute name="context">{'default_detailed_type': 'product'}</attribute>
+                </xpath>
+
                 <!-- 2. Target the 'code' (Reference) field on the form sheet and insert the creation timestamp right under it -->
                 <xpath expr="//field[@name='code']" position="after">
                     <field name="version_date" string="Version Created On" readonly="1"/>

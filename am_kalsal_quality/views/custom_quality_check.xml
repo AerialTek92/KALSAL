@@ -141,21 +141,21 @@
                             <!-- 1. FIRST QC: Shows ONLY non-delayed parameters during 1st QC -->
                             <field name="first_qc_line_ids" invisible="state != '1st_in_progress'">
                                 <list editable="bottom" create="0">
-                                    <field name="sequence" widget="handle"/>
-                                    <field name="test_parameter" readonly="1"/>
-                                    <field name="delay_required" widget="boolean_toggle" readonly="1"/>
-                                    <field name="condition" readonly="1"/>
-                                    <field name="specification" readonly="1"/>
+                                    <field name="sequence" widget="handle" width="auto"/>
+                                    <field name="test_parameter" readonly="1" width="auto"/>
+                                    <field name="delay_required" widget="boolean_toggle" readonly="1" width="auto"/>
+                                    <field name="condition" readonly="1" width="auto"/>
+                                    <field name="specification" readonly="1" width="auto"/>
 
                                     <!-- Fully editable because this list ONLY shows during 1st_in_progress -->
-                                    <field name="result"/>
+                                    <field name="result" width="auto"/>
                                     <field name="status"
                                            decoration-success="status == 'pass'"
                                            decoration-danger="status == 'fail'"
                                            decoration-warning="status == 'pending'"
-                                           decoration-info="status == 'na'"/>
-                                    <field name="remarks"/>
-                                    <field name="status_color" column_invisible="1"/>
+                                           decoration-info="status == 'na'" width="auto"/>
+                                    <field name="remarks" width="auto"/>
+                                    <field name="status_color" column_invisible="1" width="auto"/>
                                 </list>
                             </field>
 
@@ -163,22 +163,22 @@
                             <field name="second_qc_line_ids"
                                    invisible="state not in ('waiting_delay', '2nd_in_progress')">
                                 <list editable="bottom" create="0">
-                                    <field name="sequence" widget="handle"/>
-                                    <field name="test_parameter" readonly="1"/>
-                                    <field name="delay_required" widget="boolean_toggle" readonly="1"/>
-                                    <field name="condition" readonly="1"/>
-                                    <field name="specification" readonly="1"/>
+                                    <field name="sequence" widget="handle" width="auto"/>
+                                    <field name="test_parameter" readonly="1" width="auto"/>
+                                    <field name="delay_required" widget="boolean_toggle" readonly="1" width="auto"/>
+                                    <field name="condition" readonly="1" width="auto"/>
+                                    <field name="specification" readonly="1" width="auto"/>
 
                                     <!-- Readonly ONLY while waiting for the delay to end. Editable once 2nd QC starts -->
-                                    <field name="result" readonly="parent.state == 'waiting_delay'"/>
+                                    <field name="result" readonly="parent.state == 'waiting_delay'" width="auto"/>
                                     <field name="status"
                                            decoration-success="status == 'pass'"
                                            decoration-danger="status == 'fail'"
                                            decoration-warning="status == 'pending'"
                                            decoration-info="status == 'na'"
-                                           readonly="parent.state == 'waiting_delay'"/>
-                                    <field name="remarks" readonly="parent.state == 'waiting_delay'"/>
-                                    <field name="status_color" column_invisible="1"/>
+                                           readonly="parent.state == 'waiting_delay'" width="auto"/>
+                                    <field name="remarks" readonly="parent.state == 'waiting_delay'" width="auto"/>
+                                    <field name="status_color" column_invisible="1" width="auto"/>
                                 </list>
                             </field>
 

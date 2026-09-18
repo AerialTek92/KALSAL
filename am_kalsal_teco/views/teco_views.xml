@@ -17,6 +17,7 @@
                         <!-- Corrected standard group layout -->
                         <group>
                             <group>
+                                <field name="allowed_sale_order_ids" invisible="1"/>
                                 <field name="sale_order_id" string="SO Number"/>
                             </group>
                             <group>
@@ -36,12 +37,12 @@
                             <page string="Reel Consumption">
                                 <field name="reel_consumption_line_ids">
                                     <list editable="bottom" create="0">
-                                        <field name="total_qty" readonly="0"/>
-                                        <field name="order_qty_required_kgs" readonly="1"/>
-                                        <field name="total_reel_used_kgs"/>
-                                        <field name="total_pack_produced" />
-                                        <field name="scrap_percentage" widget="percentage" readonly="1"/>
-                                        <field name="reason_high_scrap" required="scrap_percentage > 0.02"/>
+                                        <field name="total_qty" readonly="0" width="auto"/>
+                                        <field name="order_qty_required_kgs" readonly="1" width="auto"/>
+                                        <field name="total_reel_used_kgs" width="auto"/>
+                                        <field name="total_pack_produced" width="auto"/>
+                                        <field name="scrap_percentage" widget="percentage" readonly="1" width="auto"/>
+                                        <field name="reason_high_scrap" required="scrap_percentage > 0.02" width="auto"/>
                                     </list>
                                 </field>
                             </page>
@@ -50,11 +51,11 @@
                             <page string="Material Issuance">
                                 <field name="material_issuance_line_ids">
                                     <list editable="bottom" create="0">
-                                        <field name="order_qty_required_kgs"/>
-                                        <field name="material_issue"/>
+                                        <field name="order_qty_required_kgs" width="auto"/>
+                                        <field name="material_issue" width="auto"/>
                                         <field name="total_produced_qty"/>
-                                        <field name="scrap_percentage" widget="percentage" readonly="1"/>
-                                        <field name="reason_high_scrap" required="scrap_percentage > 0.02"/>
+                                        <field name="scrap_percentage" widget="percentage" readonly="1" width="auto"/>
+                                        <field name="reason_high_scrap" required="scrap_percentage > 0.02" width="auto"/>
                                     </list>
                                 </field>
                             </page>
@@ -63,11 +64,11 @@
                             <page string="Box Usage">
                                 <field name="box_usage_line_ids">
                                     <list editable="bottom" create="0">
-                                        <field name="total_qty"/>
-                                        <field name="total_box_used"/>
-                                        <field name="total_pack_produced"/>
-                                        <field name="scrap_percentage" widget="percentage" readonly="1"/>
-                                        <field name="reason_high_scrap" required="scrap_percentage > 0.02"/>
+                                        <field name="total_qty" width="auto"/>
+                                        <field name="total_box_used" width="auto"/>
+                                        <field name="total_pack_produced" width="auto"/>
+                                        <field name="scrap_percentage" widget="percentage" readonly="1" width="auto"/>
+                                        <field name="reason_high_scrap" required="scrap_percentage > 0.02" width="auto"/>
                                     </list>
                                 </field>
                             </page>
@@ -76,11 +77,11 @@
                             <page string="Gum Issuance">
                                 <field name="gum_issuance_line_ids">
                                     <list editable="bottom" create="0">
-                                        <field name="ttl_boxes_req"/>
-                                        <field name="total_gum_issued"/>
-                                        <field name="gum_used"/>
-                                        <field name="scrap_percentage" widget="percentage" readonly="1"/>
-                                        <field name="reason_high_scrap" required="scrap_percentage > 0.02"/>
+                                        <field name="ttl_boxes_req" width="auto"/>
+                                        <field name="total_gum_issued" width="auto"/>
+                                        <field name="gum_used" width="auto"/>
+                                        <field name="scrap_percentage" widget="percentage" readonly="1" width="auto"/>
+                                        <field name="reason_high_scrap" required="scrap_percentage > 0.02" width="auto"/>
                                     </list>
                                 </field>
                             </page>
@@ -89,10 +90,10 @@
                             <page string="GE">
                                 <field name="production_line_ids">
                                     <list editable="bottom" create="0">
-                                        <field name="prod_in_units"/>
-                                        <field name="total_capacity"/>
-                                        <field name="global_efficiency" widget="percentage" readonly="1"/>
-                                        <field name="reason_low_prod"/>
+                                        <field name="prod_in_units" width="auto"/>
+                                        <field name="total_capacity" width="auto"/>
+                                        <field name="global_efficiency" widget="percentage" readonly="1" width="auto"/>
+                                        <field name="reason_low_prod" width="auto"/>
                                     </list>
                                 </field>
                             </page>
@@ -101,11 +102,11 @@
                             <page string="Labor (Men Power)">
                                 <field name="labor_line_ids">
                                     <list editable="bottom" create="0">
-                                        <field name="approved_men_power" readonly="1"/>
-                                        <field name="used_men_power"/>
-                                        <field name="days_used"/>
-                                        <field name="percent_extra_wrk" widget="percentage" readonly="1"/>
-                                        <field name="high_labor_cost"/>
+                                        <field name="approved_men_power" readonly="1" width="auto"/>
+                                        <field name="used_men_power" width="auto"/>
+                                        <field name="days_used" width="auto"/>
+                                        <field name="percent_extra_wrk" widget="percentage" readonly="1" width="auto"/>
+                                        <field name="high_labor_cost" width="auto"/>
                                     </list>
                                 </field>
                             </page>

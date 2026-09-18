@@ -1,5 +1,6 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
+from odoo.tools import float_compare
 
 
 class TecoProduction(models.Model):
@@ -11,7 +12,17 @@ class TecoProduction(models.Model):
     name = fields.Char(string='Reference', required=True, copy=False, readonly=True, default=lambda self: 'New')
 
     # MAIN FIELDS
-    sale_order_id = fields.Many2one('sale.order', string='SO Number', tracking=True)
+    allowed_sale_order_ids = fields.Many2many(
+        'sale.order', string='Allowed Sale Orders (Fully QC Passed)',
+        compute='_compute_allowed_sale_order_ids',
+        help="Only Sale Orders whose ENTIRE ordered quantity has passed "
+             "Finished QC - partial QC passes do not qualify.")
+
+    sale_order_id = fields.Many2one(
+        'sale.order', string='SO Number', tracking=True,
+        domain="[('id', 'in', allowed_sale_order_ids)]")
+
+
     product_id = fields.Many2one('product.product', string='Product')
 
     available_product_ids = fields.Many2many(
@@ -33,6 +44,33 @@ class TecoProduction(models.Model):
             if vals.get('name', 'New') == 'New':
                 vals['name'] = self.env['ir.sequence'].next_by_code('teco.production') or 'New'
         return super().create(vals_list)
+
+    @api.depends()
+    def _compute_allowed_sale_order_ids(self):
+        """SO selectable only when EVERY order line's full quantity is covered
+        by passed Finished QC documents (sum of qc_passed_qty per product)."""
+        passed = self.env['finished.qc'].search([
+            ('state', '=', 'passed'),
+            ('sale_order_id', '!=', False),
+        ])
+        qty_map = {}
+        for qc in passed:
+            key = (qc.sale_order_id.id, qc.product_id.id)
+            qty_map[key] = qty_map.get(key, 0.0) + qc.qc_passed_qty
+        allowed = self.env['sale.order']
+        for so in passed.mapped('sale_order_id'):
+            ok = True
+            for line in so.order_line:
+                if not line.product_id:
+                    continue
+                if float_compare(qty_map.get((so.id, line.product_id.id), 0.0),
+                                 line.product_uom_qty, precision_digits=2) < 0:
+                    ok = False
+                    break
+            if ok:
+                allowed |= so
+        for rec in self:
+            rec.allowed_sale_order_ids = allowed
 
     @api.depends('sale_order_id')
     def _compute_available_product_ids(self):

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Product form: carton master data next to Category Type -->
+    <record id="view_product_template_form_carton" model="ir.ui.view">
+        <field name="name">product.template.form.carton.config</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <!-- Target a native field that ALWAYS exists in the base view -->
+            <xpath expr="//field[@name='categ_id']" position="after">
+                <!-- Bring product_type_custom into the view invisibly so the
+                     invisible condition on semi_product_id can evaluate it -->
+                <field name="product_type_custom" invisible="1"/>
+
+                <field name="pcs_per_carton" string="SKU" invisible="product_type_custom != 'finished'"/>
+                <field name="semi_product_id"
+                       invisible="product_type_custom != 'finished'"
+                       options="{'no_open': True, 'no_create': True}"/>
+                <field name="recipe_category"/>
+
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Semi-Finished Recipe Version: right after Recipe Version, before Quantity -->
+    <record id="view_sale_order_form_semi_version" model="ir.ui.view">
+        <field name="name">sale.order.form.semi.recipe.version</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='order_line']//field[@name='bom_id']" position="after">
+                <field name="semi_bom_id" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Cartons column: right before Quantity; typing cartons fills pieces and vice-versa -->
+    <record id="view_sale_order_form_cartons" model="ir.ui.view">
+        <field name="name">sale.order.form.cartons</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_uom_qty']" position="before">
+                <field name="carton_qty" optional="show"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//field[@name='product_uom_qty']" position="before">
+                <field name="carton_qty"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

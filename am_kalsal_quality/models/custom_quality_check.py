@@ -582,12 +582,39 @@ class KalsalQualityCheck(models.Model):
 
     def _load_default_test_lines(self):
         for rec in self:
-            if rec.check_line_ids: continue
-            if rec.product_id and rec.product_id.product_tmpl_id.quality_param_line_ids:
+            # Skip if lines already exist or if product is not set
+            if rec.check_line_ids or not rec.product_id:
+                continue
+
+            # Store template in a variable for cleaner code
+            tmpl = rec.product_id.product_tmpl_id
+            type_key = tmpl.product_type_custom
+
+            # 1. Match against your custom string field
+            match type_key:
+                case 'raw':
+                    qc = tmpl.quality_param_line_ids
+                case 'packaging':
+                    qc = tmpl.packaging_material_specs
+                case _:
+                    # Convert the Selection field tuples into a dictionary
+                    selection_dict = dict(tmpl._fields['product_type_custom'].selection)
+                    # Get the label using the key (fallback to the key if not found)
+                    type_label = selection_dict.get(type_key, type_key)
+
+                    # 2. Raise Error using the type_label instead of the key
+                    raise UserError(_(
+                        "Only Raw Material & Packaging Materials are Eligible for this Quality Check. "
+                        "Product '%s' is set as '%s' in the Product Description Page."
+                    ) % (tmpl.display_name, type_label))
+
+            # 3. Correctly use the dynamically populated 'qc' recordset
+            if qc:
                 lines_to_create = []
                 seq = 10
-                for param_line in rec.product_id.product_tmpl_id.quality_param_line_ids:
-                    lines_to_create.append((0, 0, {
+                for param_line in qc:
+                    # 4. Using Odoo Command syntax
+                    lines_to_create.append(Command.create({
                         'sequence': seq,
                         'test_parameter': param_line.parameter_id.name,
                         'condition': param_line.condition or param_line.parameter_id.default_condition,
@@ -596,9 +623,11 @@ class KalsalQualityCheck(models.Model):
                         'status': 'pending',
                     }))
                     seq += 10
+
                 if lines_to_create:
                     rec.check_line_ids = lines_to_create
-
+            # else:
+            #     raise UserError(_("No Parameters Found. Kindly Set Quality Parameters on the Product Page."))
 
 class KalsalQualityCheckLine(models.Model):
     _name = 'kalsal.quality.check.line'

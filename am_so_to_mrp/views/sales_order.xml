@@ -68,7 +68,7 @@
                         type="object"
                         class="oe_stat_button"
                         icon="fa-wrench"
-                        invisible="not origin">
+                        invisible="sibling_mo_count == 1">
                     <!-- Use the computed integer count for the dynamic statinfo dashboard layout -->
                     <field name="sibling_mo_count" widget="statinfo" string="Related MOs"/>
                 </button>

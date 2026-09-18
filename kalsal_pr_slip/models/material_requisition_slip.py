@@ -1,6 +1,12 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from odoo.tools import float_compare
+from odoo.tools.float_utils import float_round
+
+
+import logging
+
+_logger = logging.getLogger(__name__)
 
 
 class MaterialRequisitionSlip(models.Model):
@@ -292,6 +298,14 @@ class MaterialRequisitionSlip(models.Model):
         lines = [(5, 0, 0)]
         if not self.bom_id:
             self.recipe_line_ids = lines
+            for line in self.recipe_line_ids:
+                _logger.warning(
+                    "MRS LINE AFTER ASSIGN | Product=%s | "
+                    "quantity_required=%s | quantity_required_total=%s",
+                    line.product_id.display_name,
+                    line.quantity_required,
+                    line.quantity_required_total,
+                )
             return
 
         bom = self.bom_id
@@ -333,6 +347,26 @@ class MaterialRequisitionSlip(models.Model):
                 raise UserError(_("Qty Producing must be greater than zero."))
 
     # ---------- MRS -> MO sync ----------
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('name', _('New')) == _('New'):
+                vals['name'] = self.env['ir.sequence'].next_by_code(
+                    'material.requisition.slip') or _('New')
+        records = super().create(vals_list)
+
+        # FIX: _sync_qty_producing_to_mo() was only wired into write(), so a
+        # brand-new MRS (created with qty_producing already set in the initial
+        # vals, as happens when saving a new form) never pushed that quantity
+        # onto the linked MO — the MO stayed at 0 / product_qty even though
+        # the MRS showed the batch qty correctly.
+        for rec in records:
+            if rec.mrp_production_id and rec.qty_producing:
+                rec._sync_qty_producing_to_mo()
+
+        return records
+
+    # ---------- MRS -> MO sync ----------
     def write(self, vals):
         res = super().write(vals)
         if 'qty_producing' in vals and not self.env.context.get('skip_mo_sync'):
@@ -361,6 +395,16 @@ class MaterialRequisitionSlip(models.Model):
                 raise UserError(_('Please select a Recipe Name before confirming.'))
             if not rec.recipe_line_ids:
                 raise UserError(_('No recipe lines to confirm.'))
+
+            # FIX: guarantee the MO reflects this batch's qty at the moment
+            # production actually starts, regardless of whether create()/write()
+            # already caught it (e.g. if mrp_production_id was only resolved
+            # after the initial save).
+            if rec.mrp_production_id and rec.qty_producing:
+                rec._sync_qty_producing_to_mo()
+
+            # ... rest of action_confirm unchanged (incomplete_lines check,
+            # warehouse/location resolution, move creation, etc.) ...
 
             # NEW: catch manually-added lines with no product before touching stock APIs
             incomplete_lines = rec.recipe_line_ids.filtered(
@@ -425,11 +469,11 @@ class MaterialRequisitionSlip(models.Model):
                 if actual_qty <= 0:
                     continue
 
-                if actual_qty < line.quantity_issued and not line.remarks:
-                    raise UserError(_(
-                        "Only %s of %s is available in stock for %s. Please reduce the "
-                        "Issued quantity or add remarks explaining the shortfall."
-                    ) % (available_qty, line.quantity_issued, line.product_id.name))
+                # if actual_qty < line.quantity_issued and not line.remarks:
+                #     raise UserError(_(
+                #         "Only %s of %s is available in stock for %s. Please reduce the "
+                #         "Issued quantity or add remarks explaining the shortfall."
+                #     ) % (available_qty, line.quantity_issued, line.product_id.name))
 
                 move_lines.append((0, 0, {
                     'product_id': line.product_id.id,
@@ -508,8 +552,16 @@ class MaterialRequisitionLine(models.Model):
     item_code = fields.Char(string='Item Code')
     item_description = fields.Char(string='Item Description')
     uom_id = fields.Many2one('uom.uom', string='UOM')
-    quantity_required = fields.Float(string='Required', default=0.0)
-    quantity_required_total = fields.Float(string='Total Required', default=0.0)
+    quantity_required = fields.Float(
+        string='Required',
+        default=0.0,
+        digits=(16, 2),
+    )
+    quantity_required_total = fields.Float(
+        string='Total Required',
+        default=0.0,
+        digits=(16, 2),
+    )
     quantity_issued = fields.Float(string='Issued', default=0.0)
     remarks = fields.Char(string='Remarks')
 

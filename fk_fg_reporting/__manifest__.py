@@ -22,6 +22,8 @@
         'security/ir.model.access.csv',
         'data/sequence.xml',
         'views/fg_reporting_views.xml',
+        'views/stock_picking_views.xml',
+        'reports/delivery_challan_report.xml',
     ],
     'installable': True,
     'application': False,

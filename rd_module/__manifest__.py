@@ -6,7 +6,7 @@
     'description': 'Custom module for R and D activities - Bills of Materials management',
     'author': 'Fakhir Khan',
     # 👇 THIS IS THE CRITICAL FIX 👇
-    'depends': ['base', 'product', 'mrp', 'sale'],
+    'depends': ['base', 'product', 'mrp', 'sale','am_so_to_mrp'],
     'data': [
         'security/security.xml',
         'security/ir.model.access.csv',
@@ -14,6 +14,7 @@
         'views/hide_menus.xml',
         'views/rd_menu_views.xml',
     ],
+    'license': 'LGPL-3',
     'installable': True,
     'application': True,
     'auto_install': False,

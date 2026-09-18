@@ -40,3 +40,24 @@ class ProductTemplate(models.Model):
                 'group_by': ['location_id'],
             },
         }
+
+    # ADD THIS: Make the field and method accessible on the variant model
+    class ProductProduct(models.Model):
+        _inherit = 'product.product'
+
+        lot_location_count = fields.Integer(
+            string='Lot/Location Count',
+            related='product_tmpl_id.lot_location_count',  # Dynamically reads from template
+        )
+
+        def action_view_lots_by_location(self):
+            self.ensure_one()
+            # Direct it to target only this specific variant instead of all variants
+            res = self.product_tmpl_id.action_view_lots_by_location()
+            res['domain'] = [
+                ('product_id', '=', self.id),
+                ('quantity', '>', 0),
+                ('lot_id', '!=', False),
+                ('location_id.usage', '!=', 'inventory'),
+            ]
+            return res

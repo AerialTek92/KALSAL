@@ -3,6 +3,7 @@ from odoo.exceptions import UserError, ValidationError
 from markupsafe import Markup
 from odoo.tools import float_compare
 
+
 class MixingSlip(models.Model):
     _name = 'mixing.slip'
     _description = 'Mixing / Production Slip'
@@ -62,7 +63,6 @@ class MixingSlip(models.Model):
                 (rec.total_wastage_kg / rec.total_issued) * 100.0, 2
             ) if rec.total_issued else 0.0
 
-
     @api.depends('sale_order_id')
     def _compute_allowed_recipe_product_ids(self):
         for rec in self:
@@ -70,12 +70,23 @@ class MixingSlip(models.Model):
                 rec.sale_order_id.order_line.mapped('product_id')
 
     def _set_mrs_and_lines(self, mrs):
-        """Attach the MRS and build one slip line per MRS line."""
+        """Attach the MRS and build one slip line per MO Raw Material line."""
         self.mrs_id = mrs
-        self.line_ids = [
-            (0, 0, {'mrs_line_id': line.id})
-            for line in mrs.recipe_line_ids
-        ]
+
+        # If the MRS doesn't have an MO generated yet, stop here.
+        if not mrs.mrp_production_id:
+            self.line_ids = [(5, 0, 0)]
+            return
+
+        # Fetch lines from the MO's raw material moves
+        lines = []
+        for i, move in enumerate(mrs.mrp_production_id.move_raw_ids, start=1):
+            lines.append((0, 0, {
+                'move_id': move.id,
+                'sno': i,  # Set the sequence number directly based on the loop
+            }))
+
+        self.line_ids = lines
 
     @api.onchange('sale_order_id')
     def _onchange_sale_order_id(self):
@@ -276,6 +287,34 @@ class MixingSlip(models.Model):
                 'name': mo.name,
             })]
 
+        # ------------------------------------------------------------------
+        # FIX: force Odoo to distribute the consumption across move_raw_ids
+        # for THIS batch, exactly like the "Quantity Producing" onchange does
+        # in the UI (mrp.production._change_producing() ->
+        # self.sudo()._set_qty_producing(False)).
+        #
+        # button_mark_done() only auto-calls _set_qty_producing() when
+        # qty_producing is still falsy at that point
+        # (see mrp.production._set_quantities():
+        #     if not self.qty_producing:
+        #         self.qty_producing = self.product_qty - self.qty_produced
+        #         self._set_qty_producing()
+        # ).
+        # Since we already wrote qty_producing above, that guard is False and
+        # _set_qty_producing() never runs — so move_raw_ids never get their
+        # `quantity` (consumed) populated for this partial run, and
+        # button_mark_done() then consumes ~0 components even though it
+        # correctly increases the finished-good quantity. This call replicates
+        # the manual/UI behavior so components are consumed exactly as they
+        # would be if a user typed the qty into the form themselves.
+        #
+        # Safe to call after action_assign_lots_to_mo_lines(): _set_qty_producing()
+        # rescales existing move_line_ids (including lot-tagged ones you already
+        # reserved) before creating any new lines, so it won't create lot-less
+        # lines or fight your FIFO lot assignment.
+        mo.sudo()._set_qty_producing(pick_manual_consumption_moves=False)
+        # ------------------------------------------------------------------
+
         # Your actual raw-material consumption is tracked on the Mixing Slip
         # lines (in_mixing), not by hand-editing each stock.move's Done
         # quantity — so force 'flexible' consumption to stop Odoo popping the
@@ -305,22 +344,51 @@ class MixingSlipLine(models.Model):
 
     slip_id = fields.Many2one(
         'mixing.slip', string='Slip', required=True, ondelete='cascade')
-    mrs_line_id = fields.Many2one(
-        'material.requisition.line', string='MRS Line', readonly=True)
 
-    sno = fields.Integer(related='mrs_line_id.sno', string='S.No', store=True)
+    # CHANGED: Replaced mrs_line_id with move_id (pointing to the MO line)
+    move_id = fields.Many2one(
+        'stock.move', string='MO Raw Material Line', readonly=True)
+
+    # sno is now a standard field assigned during creation (not computed)
+    sno = fields.Integer(string='S.No', store=True)
+
     item_code = fields.Char(
-        related='mrs_line_id.item_code', string='Item Code', store=True)
+        string='Item Code', compute='_compute_line_identity', store=True)
     item_description = fields.Char(
-        related='mrs_line_id.item_description',
-        string='Item Description', store=True)
+        string='Item Description', compute='_compute_line_identity', store=True)
     product_id = fields.Many2one(
-        related='mrs_line_id.product_id', string='Item', store=True)
+        'product.product', string='Item',
+        compute='_compute_line_identity', store=True)
     uom_id = fields.Many2one(
-        related='mrs_line_id.uom_id', string='UOM', store=True)
+        'uom.uom', string='UOM', compute='_compute_line_identity', store=True)
     quantity_issued = fields.Float(
-        related='mrs_line_id.quantity_issued',
-        string='Issued', store=True, readonly=True)
+        string='Issued', compute='_compute_line_identity', store=True)
+
+    # CHANGED: Dependencies now look at the MO's stock move
+    @api.depends('move_id', 'move_id.product_id', 'move_id.product_uom', 'move_id.product_uom_qty',
+                 'move_id.should_consume_qty')
+    def _compute_line_identity(self):
+        for rec in self:
+            m = rec.move_id
+            if m:
+                rec.product_id = m.product_id
+                rec.item_code = m.product_id.default_code
+                rec.item_description = m.product_id.display_name
+                rec.uom_id = m.product_uom
+
+                rec.quantity_issued = m.should_consume_qty if m.should_consume_qty > 0 else m.product_uom_qty
+
+                # FIX: quantity_issued can shrink after this line was already
+                # filled in (e.g. the linked MO's batch qty changed via the
+                # MRS -> MO sync). Without this, a stale `in_mixing` value trips
+                # _check_in_mixing_within_issued the next time ANYTHING in this
+                # dependency chain recomputes — even an unrelated MRS confirm —
+                # and rolls back that unrelated transaction. Self-heal instead
+                # of hard-blocking, same pattern as elsewhere in this module.
+                if rec.in_mixing and rec.quantity_issued and rec.in_mixing > rec.quantity_issued:
+                    rec.in_mixing = rec.quantity_issued
+
+
 
     in_mixing = fields.Float(string='In Mixing')
 
@@ -371,3 +439,34 @@ class MixingSlipLine(models.Model):
                     (rec.wastage_kg / rec.quantity_issued) * 100.0, 2)
             else:
                 rec.wastage_pct = 0.0
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        for line in records:
+            move = line.move_id
+            if not move:
+                continue
+            vals = {}
+
+            # Use should_consume_qty if it has a value > 0, otherwise fallback to product_uom_qty
+            issued_qty = move.should_consume_qty if move.should_consume_qty > 0 else move.product_uom_qty
+
+            for fname, source in (
+                    ('product_id', move.product_id.id),
+                    ('item_code', move.product_id.default_code),
+                    ('item_description', move.product_id.display_name),
+                    ('uom_id', move.product_uom.id),
+                    ('quantity_issued', issued_qty),
+            ):
+                field = self._fields.get(fname)
+                if field and not field.readonly and not getattr(line, fname, None) and source:
+                    vals[fname] = source
+            if vals:
+                line.write(vals)
+
+            # Packaging rides along with the issue: pass-through consumption
+            if (line.product_id.product_type_custom == 'packaging'
+                    and 'in_mixing' in self._fields and not line.in_mixing):
+                line.in_mixing = line.quantity_issued
+        return records

@@ -30,7 +30,7 @@
                             </strong>
                             <div>
                                 <field name="quantity"/>
-                                <span> Qty</span>
+                                <span>Qty</span>
                                 <br/>
                                 <field name="product_id"/>
                             </div>
@@ -62,8 +62,22 @@
         <field name="arch" type="xml">
             <xpath expr="//button[@name='action_open_product_lot']" position="replace">
                 <button name="action_view_lots_by_location" type="object"
-                        class="oe_stat_button" icon="fa-cubes"
-                        invisible="not lot_location_count">
+                        class="oe_stat_button" icon="fa-cubes">
+                    <field name="lot_location_count" widget="statinfo" string="Lots/Loc"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_product_form_lot_location" model="ir.ui.view">
+        <field name="name">product.product.form.lot.location</field>
+        <field name="model">product.product</field>
+        <!-- FIXED: Inheriting stock's variant view which actually holds the 'action_open_product_lot' button -->
+        <field name="inherit_id" ref="stock.product_form_view_procurement_button"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_open_product_lot']" position="replace">
+                <button name="action_view_lots_by_location" type="object"
+                        class="oe_stat_button" icon="fa-cubes">
                     <field name="lot_location_count" widget="statinfo" string="Lots/Loc"/>
                 </button>
             </xpath>

@@ -38,8 +38,7 @@ class FgReporting(models.Model):
         readonly=True, copy=False,
         help="Production → Store transfer generated on confirmation.")
 
-    line_ids = fields.One2many(
-        'fg.reporting.line', 'reporting_id', string='Finished Goods Lines')
+    line_ids = fields.One2many('fg.reporting.line', 'reporting_id', string='Finished Goods Lines')
 
     # ==========================================
     # GATING: SOs with AT LEAST ONE passed Semi-Finished QC
@@ -99,10 +98,11 @@ class FgReporting(models.Model):
         sno = 1
         so_lines = self.sale_order_id.order_line
         for product in so_products:
-            so_qty = sum(so_lines.filtered(
-                lambda l: l.product_id == product).mapped('product_uom_qty'))
-            cartons_to_be = int(so_qty)
-            boxes_to_be = cartons_to_be * 144
+            # CHANGED: cartons come from the SO line's carton_qty,
+            # boxes from the pcs quantity (no more hardcoded 144)
+            p_lines = so_lines.filtered(lambda l: l.product_id == product)
+            cartons_to_be = sum(p_lines.mapped('carton_qty'))
+            boxes_to_be = sum(p_lines.mapped('product_uom_qty'))
 
             lines.append((0, 0, {
                 'sno': sno,
@@ -224,19 +224,21 @@ class FgReporting(models.Model):
         finished_move = mo.move_finished_ids.filtered(lambda m: m.product_id == line.product_id)[:1]
         if not finished_move: raise UserError(_("No finished-goods move found on MO %s.") % mo.name)
 
+        # CHANGED: register production output in PCS (cartons x pcs_per_carton)
+        pcs = line.cartons_produced * (line.product_id.pcs_per_carton or 1.0)
         lot = mo.lot_producing_ids[:1] or line.lot_id
         finished_move.location_dest_id = production_location.id
-        finished_move.quantity = line.cartons_produced
+        finished_move.quantity = pcs
 
         if not finished_move.move_line_ids:
             self.env['stock.move.line'].create({
                 'move_id': finished_move.id, 'product_id': finished_move.product_id.id,
-                'lot_id': lot.id if lot else False, 'quantity': line.cartons_produced,
+                'lot_id': lot.id if lot else False, 'quantity': pcs,
                 'product_uom_id': finished_move.product_uom.id, 'location_id': finished_move.location_id.id,
                 'location_dest_id': production_location.id,
             })
         else:
-            finished_move.move_line_ids.write({'lot_id': lot.id if lot else False, 'quantity': line.cartons_produced,
+            finished_move.move_line_ids.write({'lot_id': lot.id if lot else False, 'quantity': pcs,
                                                'location_dest_id': production_location.id})
 
         res = mo.button_mark_done()
@@ -270,8 +272,10 @@ class FgReporting(models.Model):
         warehouse, source, dest = self._get_transfer_locations()
         for line in eligible_lines: self._complete_mo_for_production(line, source)
 
+        # CHANGED: transfer quantity in PCS (cartons x pcs_per_carton)
         move_vals = [(0, 0, {
-            'product_id': line.product_id.id, 'product_uom_qty': line.cartons_produced,
+            'product_id': line.product_id.id,
+            'product_uom_qty': line.cartons_produced * (line.product_id.pcs_per_carton or 1.0),
             'product_uom': line.product_id.uom_id.id, 'location_id': source.id, 'location_dest_id': dest.id,
         }) for line in eligible_lines]
 
@@ -346,6 +350,7 @@ class FgReportingLine(models.Model):
 
     @api.onchange('cartons_to_be_produced')
     def _onchange_cartons_to_be_produced(self):
-        """Keep Boxes = Cartons × 144 in sync."""
+        """CHANGED: Keep Boxes = Cartons × pcs_per_carton in sync."""
         if self.cartons_to_be_produced:
-            self.boxes_to_be_produced = self.cartons_to_be_produced * 144
+            ppc = self.product_id.pcs_per_carton or 1.0
+            self.boxes_to_be_produced = self.cartons_to_be_produced * ppc

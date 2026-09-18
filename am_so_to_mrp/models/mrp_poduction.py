@@ -138,20 +138,29 @@ class MrpProduction(models.Model):
         def _mo_priority_key(mo):
             if 'date_start' in mo._fields and mo.date_start:
                 return mo.date_start
+
             if 'date_planned_start' in mo._fields and mo.date_planned_start:
                 return mo.date_planned_start
+
             return mo.create_date
 
+        # ---------------------------------------------------------
+        # Process Manufacturing Orders FIFO
+        # ---------------------------------------------------------
         mos_fifo = self.sorted(key=_mo_priority_key)
 
         for mo in mos_fifo:
 
+            # -----------------------------------------------------
+            # Get open tracked raw-material moves
+            # -----------------------------------------------------
             raw_moves = mo.move_raw_ids.filtered(
                 lambda m:
                 m.product_id.tracking in ('lot', 'serial')
                 and m.state not in ('done', 'cancel')
             )
 
+            # Keep deterministic order
             raw_moves = raw_moves.sorted(key=lambda m: m.create_date)
 
             for move in raw_moves:
@@ -159,19 +168,24 @@ class MrpProduction(models.Model):
                 product = move.product_id
                 source_location = move.location_id
 
-                # Quantity already assigned to this move
+                # -------------------------------------------------
+                # Quantity already assigned to THIS move
+                # -------------------------------------------------
                 already_on_this_move = sum(
                     move.move_line_ids.mapped('quantity')
                 )
 
                 qty_still_needed = (
-                        move.product_uom_qty - already_on_this_move
+                        move.product_uom_qty
+                        - already_on_this_move
                 )
 
                 if qty_still_needed <= 0:
                     continue
 
-                # ONLY look at positive stock with a LOT
+                # -------------------------------------------------
+                # Find positive stock with LOT
+                # -------------------------------------------------
                 quants = StockQuant.search([
                     ('product_id', '=', product.id),
                     ('location_id', '=', source_location.id),
@@ -179,45 +193,100 @@ class MrpProduction(models.Model):
                     ('lot_id', '!=', False),
                 ], order='in_date asc, id asc')
 
-                new_move_line_vals = []
+                # -------------------------------------------------
+                # Group stock by LOT
+                #
+                # Prevent processing the same lot multiple times
+                # when multiple quants exist for the same lot.
+                # -------------------------------------------------
+                lot_stock = {}
+
+                lot_order = []
 
                 for quant in quants:
+
+                    lot_id = quant.lot_id.id
+
+                    if lot_id not in lot_stock:
+                        lot_stock[lot_id] = {
+                            'lot': quant.lot_id,
+                            'quantity': 0.0,
+                            'in_date': quant.in_date or quant.id,
+                        }
+
+                        lot_order.append(lot_id)
+
+                    lot_stock[lot_id]['quantity'] += quant.quantity
+
+                # -------------------------------------------------
+                # Process lots FIFO
+                # -------------------------------------------------
+                new_move_line_vals = []
+
+                for lot_id in lot_order:
 
                     if qty_still_needed <= 0:
                         break
 
-                    lot = quant.lot_id
+                    lot_data = lot_stock[lot_id]
 
-                    # Quantity of this lot already consumed/reserved
-                    # by other open MO moves.
-                    consumed_elsewhere = sum(
+                    lot = lot_data['lot']
+                    lot_quantity = lot_data['quantity']
+
+                    # -------------------------------------------------
+                    # IMPORTANT:
+                    #
+                    # Count ALL open move lines using this lot,
+                    # including THIS move.
+                    # -------------------------------------------------
+                    allocated_from_lot = sum(
                         StockMoveLine.search([
                             ('lot_id', '=', lot.id),
-                            ('move_id', '!=', move.id),
+                            ('product_id', '=', product.id),
+                            ('location_id', '=', source_location.id),
                             ('move_id.state', 'not in', ('done', 'cancel')),
                         ]).mapped('quantity')
                     )
 
+                    # -------------------------------------------------
+                    # Remaining stock in this lot
+                    # -------------------------------------------------
                     remaining_in_lot = (
-                            quant.quantity - consumed_elsewhere
+                            lot_quantity
+                            - allocated_from_lot
                     )
 
                     if remaining_in_lot <= 0:
                         continue
 
+                    # -------------------------------------------------
+                    # Assign only what this MO still needs
+                    # -------------------------------------------------
                     assign_qty = min(
                         qty_still_needed,
                         remaining_in_lot
                     )
 
+                    # -------------------------------------------------
+                    # Check whether this MO already has this lot
+                    # -------------------------------------------------
                     existing_line = move.move_line_ids.filtered(
-                        lambda l: l.lot_id.id == lot.id
+                        lambda l:
+                        l.lot_id
+                        and l.lot_id.id == lot.id
                     )
 
                     if existing_line:
-                        existing_line[0].quantity += assign_qty
+
+                        existing_line[0].write({
+                            'quantity': (
+                                    existing_line[0].quantity
+                                    + assign_qty
+                            )
+                        })
 
                     else:
+
                         new_move_line_vals.append(
                             (0, 0, {
                                 'move_id': move.id,
@@ -230,21 +299,22 @@ class MrpProduction(models.Model):
                             })
                         )
 
+                    # -------------------------------------------------
+                    # Reduce remaining requirement
+                    # -------------------------------------------------
                     qty_still_needed -= assign_qty
 
-                # IMPORTANT:
-                # Do NOT call _action_assign().
-                # That would invoke Odoo's native reservation logic
-                # and can create a lot-less line for the remaining demand.
-
+                # -----------------------------------------------------
+                # Create new move lines
+                # -----------------------------------------------------
                 if new_move_line_vals:
                     move.write({
                         'move_line_ids': new_move_line_vals
                     })
 
-                # If nothing is available, don't create anything.
-                # The move should simply remain partially/unavailable.
-
+                # -----------------------------------------------------
+                # DO NOT call _action_assign()
+                # -----------------------------------------------------
 
     def _generate_forecast_budget(self):
         """
@@ -368,14 +438,13 @@ class MrpProduction(models.Model):
                     "SELECT id FROM product_product WHERE id IN %s FOR UPDATE",
                     (tuple(products.ids),)
                 )
-        res = super(MrpProduction, self).action_confirm()
-        for rec in self:
-            if rec.qty_producing != rec.product_qty:
-                rec.write({'qty_producing': rec.product_qty})
-            rec.do_unreserve()
+        super(MrpProduction, self).action_confirm()
+        # for rec in self:
+        #     if rec.qty_producing != rec.product_qty:
+        #         rec.write({'qty_producing': rec.product_qty})
+        #     rec.do_unreserve()
         self.action_assign_lots_to_mo_lines()
         self._generate_forecast_budget()
-        return res
 
     def write(self, vals):
         if any(f in vals for f in ['move_raw_ids', 'product_qty', 'qty_producing']):
@@ -445,6 +514,8 @@ class StockMove(models.Model):
         return bool(so) and so[:1].state == 'sale'
 
     def _compute_shortness(self):
+        WASTAGE_BUFFER_PCT = 0.02  # 2% — buy ahead for expected mixing/handling wastage
+
         stock_location = self.env.ref('stock.stock_location_stock', raise_if_not_found=False)
         production_location = self.env.ref('stock.location_production', raise_if_not_found=False)
 
@@ -482,7 +553,15 @@ class StockMove(models.Model):
 
             for move in ordered_moves:
                 consumed = sum(move.move_line_ids.mapped('quantity'))
-                remaining_demand = max(0.0, move.product_uom_qty - consumed)
+
+                # FIX: inflate the BOM-line requirement by the wastage buffer
+                # before netting off what's already consumed. `consumed` stays
+                # as the real, un-inflated quantity actually used so far —
+                # only the still-outstanding requirement gets the 2% pad, so
+                # on-hand/incoming stock is judged against "enough to cover
+                # wastage too", not just the bare recipe quantity.
+                required_with_buffer = move.product_uom_qty * (1 + WASTAGE_BUFFER_PCT)
+                remaining_demand = max(0.0, required_with_buffer - consumed)
 
                 covered = min(available_pool, remaining_demand)
                 available_pool -= covered

@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_am_bom_versions_finalized_am_bom_versions_finalized,am_bom_versions_finalized.am_bom_versions_finalized,model_am_bom_versions_finalized_am_bom_versions_finalized,base.group_user,1,1,1,1

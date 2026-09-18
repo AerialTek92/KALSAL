@@ -42,6 +42,18 @@
                             <field name="testing_date" readonly="state != 'in_progress'"/>
                             <field name="reporting_date" readonly="state != 'in_progress'"/>
                         </group>
+
+                        <group string="Quantity Control">
+                            <group>
+                                <field name="qty_to_qc"
+                                       readonly="state not in ('draft', 'in_progress')"/>
+                                <field name="available_for_qc"/>
+                            </group>
+                            <group>
+                                <field name="qc_passed_qty"/>
+                                <field name="qc_failed_qty"/>
+                            </group>
+                        </group>
                     </group>
 
                     <notebook>

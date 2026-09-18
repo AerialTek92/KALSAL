@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_picking_form_delivery_extras" model="ir.ui.view">
+        <field name="name">stock.picking.form.delivery.extras</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <!-- Right-hand group, next to Source Document -->
+            <xpath expr="//field[@name='origin']" position="after">
+                <field name="vehicle_number"
+                       invisible="picking_type_code != 'outgoing'"
+                       required="picking_type_code == 'outgoing' and state not in ('draft', 'cancel')"/>
+                <field name="sto_number"
+                       invisible="picking_type_code != 'outgoing'"
+                       required="picking_type_code == 'outgoing' and state not in ('draft', 'cancel')"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

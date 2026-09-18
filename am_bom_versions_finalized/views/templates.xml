@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="mrp_production_form_inherit_linked_mo" model="ir.ui.view">
+        <field name="name">mrp.production.form.inherit.linked.mo</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='bom_id']" position="after">
+                <field name="linked_mo_id" invisible="not linked_mo_id"/>
+            </xpath>
+
+            <xpath expr="//div[@name='button_box']" position="inside">
+
+                <!-- 1. The Linked MO Button -->
+                <button name="action_open_linked_mo"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-cogs"
+                        invisible="not linked_mo_id">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Linked MO</span>
+                    </div>
+                </button>
+
+                <!-- 2. The NEW Sales Order Button -->
+                <button name="action_open_sale_order"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-file-text-o"
+                        invisible="not custom_sale_order_id">
+                    <div class="o_stat_info">
+                        <span class="o_stat_value"><field name="custom_sale_order_id" readonly="1"/></span>
+                        <span class="o_stat_text">Sales Order</span>
+                    </div>
+                </button>
+
+            </xpath>
+        </field>
+    </record>
+</odoo>

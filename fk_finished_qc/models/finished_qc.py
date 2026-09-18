@@ -58,7 +58,7 @@ class FinishedQC(models.Model):
 
     performed_by_id = fields.Many2one(
         'res.users', string='Performed By',
-        default=lambda self: self.env.user, tracking=True)
+        default=lambda self: env.user if False else self.env.user, tracking=True)
 
     # ==========================================
     # SAMPLING & ENVIRONMENT
@@ -91,6 +91,60 @@ class FinishedQC(models.Model):
         'finished.qc.line', 'micro_qc_id', string='Microbiological Test Parameters')
 
     # ==========================================
+    # QUANTITY POOL (parity with semi.finished.qc)
+    # ==========================================
+    qty_to_qc = fields.Float(
+        string='Qty to QC', tracking=True, digits='Product Unit of Measure',
+        help="Finished-goods quantity covered by this QC document.")
+    qc_passed_qty = fields.Float(
+        string='QC Passed Qty', readonly=True, tracking=True,
+        digits='Product Unit of Measure')
+    qc_failed_qty = fields.Float(
+        string='QC Failed Qty', readonly=True, tracking=True,
+        digits='Product Unit of Measure')
+    available_for_qc = fields.Float(
+        string='Available for QC', compute='_compute_available_for_qc',
+        digits='Product Unit of Measure',
+        help="Produced qty (from the batch lot, or done MOs) minus qty already "
+             "covered by other QC documents of this SO/product.")
+
+    @api.depends('sale_order_id', 'product_id', 'qty_to_qc')
+    def _compute_available_for_qc(self):
+        """Available for Final QC = everything Semi-Finished QC has PASSED for
+        this SO/product, minus quantities already covered by other FG QC docs."""
+        for rec in self:
+            if not (rec.sale_order_id and rec.product_id):
+                rec.available_for_qc = 0.0
+                continue
+            sfg_qcs = self.env['semi.finished.qc'].search([
+                ('sale_order_id', '=', rec.sale_order_id.id),
+                ('product_id', '=', rec.product_id.id),
+                ('state', '=', 'passed'),
+            ])
+            sfg_passed = sum(qc.qc_passed_qty or qc.qty_to_qc for qc in sfg_qcs)
+            already = sum(self.search([
+                ('sale_order_id', '=', rec.sale_order_id.id),
+                ('product_id', '=', rec.product_id.id),
+                ('id', '!=', (rec.id or 0)),
+            ]).mapped('qty_to_qc'))
+            rec.available_for_qc = max(sfg_passed - already, 0.0)
+
+    @api.onchange('batch_no')
+    def _onchange_batch_no_default_qty(self):
+        for rec in self:
+            if rec.batch_no and not rec.qty_to_qc:
+                rec.qty_to_qc = rec.available_for_qc
+
+    @api.constrains('qty_to_qc')
+    def _check_qty_to_qc_within_available(self):
+        for rec in self:
+            if rec.qty_to_qc and rec.qty_to_qc > rec.available_for_qc + 0.01:
+                raise UserError(_(
+                    "Qty to QC (%s) exceeds Available for QC (%s) for %s on %s.")
+                    % (rec.qty_to_qc, rec.available_for_qc,
+                       rec.product_id.display_name, rec.sale_order_id.name))
+
+    # ==========================================
     # GATING: only SOs whose Semi-Finished QC PASSED
     # ==========================================
     allowed_sale_order_ids = fields.Many2many(
@@ -101,13 +155,11 @@ class FinishedQC(models.Model):
         """SO is selectable only if at least one of its products still needs
         the Final QC (passed SFG + confirmed FG Report + not Final-QC'd)."""
         for rec in self:
-            # SO -> products with passed Semi-Finished QC
             so_passed = {}
             for qc in self.env['semi.finished.qc'].search([('state', '=', 'passed')]):
                 if qc.sale_order_id:
                     so_passed.setdefault(qc.sale_order_id.id, set()).add(qc.product_id.id)
 
-            # SO -> products included in a confirmed FG Report
             so_reported = {}
             for rpt in self.env['fg.reporting'].search([('state', '=', 'confirmed')]):
                 if rpt.sale_order_id:
@@ -115,7 +167,6 @@ class FinishedQC(models.Model):
                         rpt.sale_order_id.id, set()
                     ).update(rpt.line_ids.mapped('product_id').ids)
 
-            # SO -> products that already have a completed Final QC
             so_done = {}
             for fqc in self.search([('state', 'in', ('passed', 'failed'))]):
                 if fqc.sale_order_id:
@@ -130,10 +181,6 @@ class FinishedQC(models.Model):
 
     @api.depends('sale_order_id')
     def _compute_allowed_recipe_product_ids(self):
-        """Only SO products that:
-        1. passed Semi-Finished QC,
-        2. are included in a CONFIRMED FG Report,
-        3. and have NOT been Final-QC'd yet (no passed/failed Finished QC)."""
         for rec in self:
             if not rec.sale_order_id:
                 rec.allowed_recipe_product_ids = False
@@ -151,7 +198,6 @@ class FinishedQC(models.Model):
                 ('state', '=', 'confirmed'),
             ]).mapped('line_ids.product_id')
 
-            # NEW: products that already have a completed Final QC (passed or failed)
             done_products = self.search([
                 ('sale_order_id', '=', rec.sale_order_id.id),
                 ('state', 'in', ('passed', 'failed')),
@@ -188,33 +234,35 @@ class FinishedQC(models.Model):
         if self.sale_order_id:
             self.product_id = False
             self.batch_no = False
+            self.qty_to_qc = 0.0
             self.standard_line_ids = [(5, 0, 0)]
             self.microbiological_line_ids = [(5, 0, 0)]
 
     @api.onchange('product_id')
     def _onchange_product_id_fetch_batch(self):
-        """Fetch Batch/Lot from the MO and auto-load the fg_specs parameters."""
+        """Fetch the LATEST Batch/Lot from the MO and auto-load fg_specs."""
         batch = False
         if self.sale_order_id and self.product_id:
             so_name = self.sale_order_id.name
             mo = self.env['mrp.production'].search([
                 ('origin', 'like', f'{so_name}%'),
-                ('product_id', '=', self.product_id.id)
+                ('product_id', '=', self.product_id.id),
+                ('state', 'in', ('done', 'to_close', 'progress')),
             ], limit=1, order='id desc')
 
             if mo and mo.lot_producing_ids:
-                batch = mo.lot_producing_ids[0].id
+                batch = mo.lot_producing_ids[-1].id   # LATEST batch lot
 
         if not batch and self.product_id:
             lot = self.env['stock.lot'].search([
                 ('product_id', '=', self.product_id.id),
-                ('company_id', '=', self.env.company.id)
+                ('company_id', '=', self.env.company.id),
             ], order='id desc', limit=1)
             if lot:
                 batch = lot.id
 
         self.batch_no = batch
-
+        self.qty_to_qc = 0.0
         self.standard_line_ids = [(5, 0, 0)]
         self.microbiological_line_ids = [(5, 0, 0)]
 
@@ -229,6 +277,7 @@ class FinishedQC(models.Model):
                         '"Finished Goods QC Parameters" tab.'
                     ) % self.product_id.display_name,
                 }}
+            self.qty_to_qc = self.available_for_qc
 
     # ==========================================
     # ACTIONS & VALIDATION
@@ -236,7 +285,6 @@ class FinishedQC(models.Model):
     def action_start(self):
         self.ensure_one()
 
-        # Clean ghost lines (rows saved without a parameter)
         ghost_standard = self.standard_line_ids.filtered(lambda l: not l.parameter_id)
         ghost_micro = self.microbiological_line_ids.filtered(lambda l: not l.parameter_id)
         if ghost_standard:
@@ -249,8 +297,6 @@ class FinishedQC(models.Model):
         self.write({'state': 'in_progress'})
 
     def _collect_validation_errors(self, lines, result):
-        """Collects EVERY validation problem into a list so the user gets
-        ONE single error listing all issues, instead of sequential popups."""
         errors = []
         if not lines:
             return errors
@@ -258,9 +304,6 @@ class FinishedQC(models.Model):
         def _label(line):
             return line.parameter_id.name or _('Unnamed Parameter')
 
-        # 1. Missing results / pending statuses
-        #    (detection lines are "complete" once detection_result is chosen,
-        #     so we don't require the text 'result' field for them)
         incomplete_lines = lines.filtered(
             lambda l: l.status == 'pending'
                       or (not l.result and l.status != 'na' and l.condition != 'detection')
@@ -271,9 +314,6 @@ class FinishedQC(models.Model):
             ) % '\n• '.join([_label(l) for l in incomplete_lines]))
 
         if result == 'Pass':
-            # 2. Failed lines without remarks
-            #    (exclude detection lines: they are reported by the dedicated
-            #     "PRESENT but no remarks" gate in action_pass to avoid duplicates)
             failed_no_remarks = lines.filtered(
                 lambda l: l.status == 'fail' and not l.remarks and l.condition != 'detection'
             )
@@ -282,7 +322,6 @@ class FinishedQC(models.Model):
                     "❌ The following parameters are FAILED but have no remarks:\n• %s"
                 ) % '\n• '.join([_label(l) for l in failed_no_remarks]))
 
-            # 3. Forced pass without remarks (unchanged, relies on updated _expected_status)
             forced_pass_no_remarks = lines.filtered(
                 lambda l: l.status == 'pass'
                           and l._expected_status() == 'fail'
@@ -304,6 +343,10 @@ class FinishedQC(models.Model):
             raise UserError(_("No test parameters found. Please load parameters before passing."))
 
         errors = []
+
+        # 0. GATE: quantity must be defined BEFORE passing
+        if self.qty_to_qc <= 0:
+            errors.append(_("❌ Qty to QC must be greater than zero."))
 
         # 1. GATE: Sample Condition must be Satisfactory
         if self.sample_condition != 'satisfactory':
@@ -327,7 +370,7 @@ class FinishedQC(models.Model):
         if present_no_remarks:
             errors.append(_(
                 "❌ The following tests are PRESENT but have no remarks:\n• %s"
-            ) % '\n• '.join(present_no_remarks.mapped('test_parameter')))
+            ) % '\n• '.join(present_lines.mapped('test_parameter')))
 
         # 4. Line-level validation (both tabs together)
         errors += self._collect_validation_errors(all_lines, 'Pass')
@@ -338,9 +381,9 @@ class FinishedQC(models.Model):
                 "Please fix all the above issues before proceeding."
             ) % '\n\n'.join(errors))
 
-        self.write({'state': 'passed'})
+        # STAMP the passed quantity
+        self.write({'state': 'passed', 'qc_passed_qty': self.qty_to_qc})
 
-        # Audit trail for forced passes
         if present_lines:
             self.message_post(body=_(
                 "<b>FORCED PASS:</b> QC passed with test(s) marked PRESENT: %s. "
@@ -365,14 +408,14 @@ class FinishedQC(models.Model):
         if errors:
             raise UserError(_("QC Validation Error:\n\n%s") % '\n\n'.join(errors))
 
-        self.write({'state': 'failed'})
+        # STAMP the failed quantity
+        self.write({'state': 'failed', 'qc_failed_qty': self.qty_to_qc})
         self.message_post(body=_(
             "<b>BATCH ON HOLD / DISCARDED.</b><br/>"
             "The Finished Goods QC has FAILED."
         ))
 
     def _load_default_parameters(self):
-        """Splits fg_specs into standard and microbiological lines based on the checkbox."""
         self.ensure_one()
         if not self.product_id:
             return
@@ -386,8 +429,6 @@ class FinishedQC(models.Model):
                 'specification': param_line.specification or param_line.parameter_id.default_specification,
                 'condition': param_line.condition or param_line.parameter_id.default_condition,
             }
-
-            # ROUTING: Checkbox decides the tab
             if param_line.is_microbiological:
                 microbiological_lines.append((0, 0, line_vals))
             else:
@@ -399,8 +440,6 @@ class FinishedQC(models.Model):
             self.microbiological_line_ids = microbiological_lines
 
     def action_reload_default_parameters(self):
-        """Wipe current test lines and reload them from the product's
-        'Finished Goods QC Parameters' tab (auto-split Standard / Micro)."""
         for rec in self:
             if rec.state not in ('draft', 'in_progress'):
                 raise UserError(_(
@@ -418,7 +457,7 @@ class FinishedQC(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
-            if vals.get('name', _('New')) == _('New'):
+            if vals.get('name', _('New')) == 'New':
                 vals['name'] = self.env['ir.sequence'].next_by_code('finished.qc') or _('New')
         return super().create(vals_list)
 
@@ -428,7 +467,6 @@ class FinishedQCLine(models.Model):
     _description = 'Finished Goods QC Test Line'
     _order = 'sequence, id'
 
-    # Two separate inverse fields: a line belongs to exactly ONE tab.
     standard_qc_id = fields.Many2one(
         'finished.qc', string='QC Document', ondelete='cascade', index=True)
     micro_qc_id = fields.Many2one(
@@ -443,12 +481,11 @@ class FinishedQCLine(models.Model):
     condition = fields.Selection([
         ('nmt', 'Not More Than'),
         ('nlt', 'Not Less Than'),
-        ('detection', 'Detection Test (Present / Absent)'),  # ← ADD THIS
+        ('detection', 'Detection Test (Present / Absent)'),
     ], string='Condition')
 
     result = fields.Char(string='Result')
 
-    # Mandatory explicit choice: Absent (Pass) / Present (Fail, needs remarks to pass)
     detection_result = fields.Selection([
         ('absent', 'Absent'),
         ('present', 'Present'),
@@ -474,7 +511,6 @@ class FinishedQCLine(models.Model):
 
     @api.onchange('detection_result')
     def _onchange_detection_result(self):
-        """Keep the text Result in sync for traceability / reports."""
         for rec in self:
             if rec.detection_result == 'present':
                 rec.result = 'Present'
@@ -486,7 +522,6 @@ class FinishedQCLine(models.Model):
     @api.depends('result', 'specification', 'condition', 'detection_result')
     def _compute_status(self):
         for rec in self:
-            # DETECTION TESTS: driven purely by the mandatory detection choice
             if rec.condition == 'detection':
                 if not rec.detection_result:
                     rec.status = 'pending'
@@ -494,7 +529,6 @@ class FinishedQCLine(models.Model):
                     rec.status = 'fail' if rec.detection_result == 'present' else 'pass'
                 continue
 
-            # NUMERIC TESTS: NMT / NLT engine
             if not rec.result:
                 if rec.status not in ['na']:
                     rec.status = 'pending'
@@ -520,7 +554,7 @@ class FinishedQCLine(models.Model):
                 return False
             return 'fail' if self.detection_result == 'present' else 'pass'
 
-        target_val = self._parse_to_float(self.specification)
+        target_val = rec._parse_to_float(self.specification) if False else self._parse_to_float(self.specification)
         actual_val = self._parse_to_float(self.result)
         if target_val is None or actual_val is None:
             return False

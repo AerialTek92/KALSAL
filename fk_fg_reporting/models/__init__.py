@@ -1,1 +1,1 @@
-from . import fg_reporting
+from . import fg_reporting,stock_picking

@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="stock.action_report_delivery" model="ir.actions.report">
+        <field name="name">Delivery Challan</field>
+        <field name="model">stock.picking</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">fk_fg_reporting.report_delivery_challan_document</field>
+        <field name="report_file">fk_fg_reporting.report_delivery_challan_document</field>
+        <field name="print_report_name">'Delivery Challan - %s' % (object.name)</field>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <template id="report_delivery_challan_document">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.basic_layout">
+
+                    <style type="text/css">
+                        .page {
+                        font-family: Arial, sans-serif;
+                        font-size: 11px;
+                        color: black;
+                        }
+                        .custom-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-bottom: 15px;
+                        }
+                        .custom-table th, .custom-table td {
+                        border: 1px solid black;
+                        padding: 5px;
+                        text-align: center;
+                        vertical-align: middle;
+                        }
+                        .text-left { text-align: left !important; }
+                        .text-right { text-align: right !important; }
+                    </style>
+
+                    <div class="page">
+
+                        <!-- Header -->
+                        <div class="row pb-4">
+                            <div class="col-6">
+                                <img t-if="o.company_id.logo" t-att-src="image_data_uri(o.company_id.logo)"
+                                     style="max-height: 55px;" alt="Logo"/>
+                            </div>
+                            <div class="col-6 text-right">
+                                <img src="/am_so_to_mrp/static/src/img/second_logo.png"
+                                     style="max-height: 35px; margin-bottom: 5px;" alt="CELAKT"/>
+                                <div style="font-weight: bold; font-size: 14px; margin-top: 5px;">
+                                    <t t-esc="o.company_id.name"/>
+                                </div>
+                                <div style="font-size: 9px; line-height: 1.2;">
+                                    <t t-esc="o.company_id.street"/>,
+                                    <t t-esc="o.company_id.city"/>
+                                    <br/>
+                                    tellus@kalsalpk.com Tel: +92 21 34551950
+                                    <br/>
+                                    NTN: 9672510
+                                    <br/>
+                                    STRN 02-02-21-06-001-37
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Title + Date / Challan # -->
+                        <h4 style="font-weight: bold; margin-bottom: 5px; color: black;">Delivery Challan</h4>
+                        <div class="row">
+                            <div class="col-5">
+                                <table class="custom-table">
+                                    <tr>
+                                        <th style="width: 50%; font-size: 0.80rem;">Date</th>
+                                        <th style="width: 50%; font-size: 0.80rem;">Delivery Challan #</th>
+                                    </tr>
+                                    <tr>
+                                        <td style="font-size: 0.80rem;">
+                                            <t t-esc="(o.date_done or o.scheduled_date).strftime('%d/%m/%Y') if (o.date_done or o.scheduled_date) else ''"/>
+                                        </td>
+                                        <td style="font-size: 0.80rem;">
+                                            <t t-esc="o.name"/>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <br/>
+
+                        <!-- Bill To / Ship To -->
+                        <t t-set="bill_partner" t-value="o.partner_id.commercial_partner_id or o.partner_id"/>
+                        <div class="row">
+                            <div class="col-5">
+                                <table class="custom-table">
+                                    <tr>
+                                        <th class="text-left">Bill To</th>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-left"
+                                            style="height: 75px; vertical-align: top; font-size: 0.80rem;">
+                                            <t t-esc="bill_partner.name"/>
+                                            <br/>
+                                            <t t-esc="bill_partner.street"/>
+                                            <br/>
+                                            <t t-esc="bill_partner.city"/>
+                                            <br/>
+                                            NTN #
+                                            <t t-esc="bill_partner.vat or ''"/>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-1"></div>
+                            <div class="col-6">
+                                <table class="custom-table">
+                                    <tr>
+                                        <th class="text-left">Ship To</th>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-left"
+                                            style="height: 75px; vertical-align: top;font-size: 0.80rem;">
+                                            <t t-esc="o.partner_id.name"/>
+                                            <br/>
+                                            <t t-esc="o.partner_id.street"/>
+                                            <br/>
+                                            <t t-esc="o.partner_id.city"/>
+                                            <br/>
+                                            NTN #
+                                            <t t-esc="o.partner_id.vat or ''"/>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <br/>
+                        <!-- Lines -->
+                        <t t-set="done_moves"
+                           t-value="o.move_ids.filtered(lambda m: m.state == 'done').sorted(key=lambda m: m.product_id.default_code or '')"/>
+                        <t t-set="total_cartons"
+                           t-value="sum((m.quantity or 0.0) / (m.product_id.pcs_per_carton or 1.0) for m in done_moves)"/>
+                        <table class="custom-table" style="margin-bottom: 5px;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 10%;">Item Code</th>
+                                    <th style="width: 27%;">Item Description</th>
+                                    <th style="width: 13%;">PO No.</th>
+                                    <th style="width: 12%;">Batch No.</th>
+                                    <th style="width: 16%;">Packing</th>
+                                    <th style="width: 10%;">UOM</th>
+                                    <th style="width: 12%;">Quantity</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="done_moves" t-as="move">
+                                    <t t-set="ppc" t-value="move.product_id.pcs_per_carton or 1.0"/>
+                                    <t t-set="cartons" t-value="(move.quantity or 0.0) / ppc"/>
+                                    <tr>
+                                        <td>
+                                            <t t-esc="move.product_id.default_code or ''"/>
+                                        </td>
+                                        <td class="text-left">
+                                            <t t-esc="move.product_id.name"/>
+                                        </td>
+                                        <td>
+                                            <t t-esc="o.sale_id.name or ''"/>
+                                        </td>
+                                        <td>
+                                            <t t-esc="', '.join(move.lot_ids.mapped('name'))"/>
+                                        </td>
+                                        <td>
+                                            <t t-if="move.product_id.pcs_per_carton">
+                                                <t t-esc="'%g Pack Per Carton' % move.product_id.pcs_per_carton"/>
+                                            </t>
+                                        </td>
+                                        <td>Carton</td>
+                                        <td>
+                                            <t t-esc="'%g' % cartons"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                                <tr>
+                                    <td colspan="7" style="height: 90px;"></td>
+                                </tr>
+                                <tr>
+                                    <th colspan="6" class="text-right" style="font-size: 13px;">Total Carton</th>
+                                    <td class="text-right" style="font-weight: bold; font-size: 13px;">
+                                        <t t-esc="'%g' % total_cartons"/>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- Notes / STO / Vehicle -->
+                        <div style="font-size: 10px; margin-top: 15px; line-height: 1.6;">
+                            <div>
+                                <b>Note:</b>
+                                The material has been received in good condition &amp; as per approved sample and
+                                quality.
+                            </div>
+                            <div>Document Ref # STO No.
+                                <b>
+                                    <t t-esc="o.sto_number or ''"/>
+                                </b>
+                            </div>
+                            <div>Vehicle No.
+                                <b>
+                                    <t t-esc="o.vehicle_number or ''"/>
+                                </b>
+                            </div>
+                        </div>
+
+                        <!-- Signatures -->
+                        <div class="row" style="margin-top: 70px;">
+                            <div class="col-6 text-center">
+                                <div style="border-top: 1px solid black; width: 70%; margin: 0 auto; padding-top: 4px; font-weight: bold;">
+                                    Recipient Name &amp; Signature
+                                </div>
+                            </div>
+                            <div class="col-6 text-center">
+                                <div style="border-top: 1px solid black; width: 70%; margin: 0 auto; padding-top: 4px; font-weight: bold;">
+                                    For KalSal
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer (repeats on every page) -->
+                    <div class="footer"
+                         style="font-size: 9px; font-weight: bold; text-align: left; font-family: Arial, sans-serif;">
+                        KalSal runs on in-house ERP, Business Broadcast (R) BB. The document does not require signature.
+                        "KalSal-CELAKT-Montu-Baymisl-Roots-Barasinga" brands are owned by KalSal
+                    </div>
+
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

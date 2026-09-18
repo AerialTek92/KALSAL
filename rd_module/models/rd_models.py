@@ -5,6 +5,13 @@ from odoo.exceptions import UserError
 class MrpBom(models.Model):
     _inherit = 'mrp.bom'
 
+
+    # This redefines the field domain at the database/Python level for mrp.bom
+    product_tmpl_id = fields.Many2one(
+        'product.template',
+        domain="[('product_type_custom', 'in', ['finished', 'semi'])]"
+    )
+
     # 1. Updated Selection options to include the new 'rejected' state tracking phase
     state = fields.Selection([
         ('draft', 'Pending Approval'),
@@ -14,7 +21,7 @@ class MrpBom(models.Model):
 
     # group_operator="max" ensures the header row displays the latest version number
     version = fields.Float(string='Version', default=1.0, tracking=True, copy=False, readonly=True,
-                           group_operator="max")
+                           aggregator="max")
 
     # Added default=fields.Datetime.now so it stamps immediately upon creation/cloning
     version_date = fields.Datetime(

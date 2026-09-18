@@ -11,6 +11,7 @@ access_product_quality_parameter_line_user,product.quality.parameter.line.user,m
 access_product_quality_parameter_line_manager,product.quality.parameter.line.manager,model_product_quality_parameter_line,quality.group_quality_manager,1,1,1,1
 access_semi_quality_parameter_line_user,semi.quality.parameter.line.user,model_semi_quality_parameter_line,base.group_user,1,1,1,1
 access_semi_quality_parameter_line_manager,semi.quality.parameter.line.manager,model_semi_quality_parameter_line,quality.group_quality_manager,1,1,1,1
+access_packaging_quality_parameter_line_manager,packaging.quality.parameter.line.manager,model_packaging_quality_parameter_line,quality.group_quality_manager,1,1,1,1
 access_finished_quality_parameter_line_user,finished.quality.parameter.line.user,model_finished_quality_parameter_line,base.group_user,1,1,1,1
 access_finished_quality_parameter_line_manager,finished.quality.parameter.line.manager,model_finished_quality_parameter_line,quality.group_quality_manager,1,1,1,1
 access_color_parameter_user,color.parameter.user,model_color_parameter,base.group_user,1,1,1,1

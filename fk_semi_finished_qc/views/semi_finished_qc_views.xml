@@ -46,6 +46,7 @@
                             <field name="product_id"
                                    required="1"
                                    readonly="state != 'draft' or not sale_order_id"/>
+                            <field name="semi_product_id" required="1" readonly="state != 'draft' or not sale_order_id"/>
                             <field name="product_category" required="1"/>
                             <!-- NEW: behaves exactly like 'Responsible' in the 1st QC -->
                             <field name="performed_by_id"/>

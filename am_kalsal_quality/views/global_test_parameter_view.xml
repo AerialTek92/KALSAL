@@ -63,7 +63,8 @@
 
 
             <xpath expr="//notebook" position="inside">
-                <page string="Raw Material QC Parameters" name="quality_parameters" invisible="product_type_custom == 'finished'">
+                <page string="Raw Material QC Parameters" name="quality_parameters"
+                      invisible="product_type_custom in ['finished','packaging','semi']">
                     <field name="quality_param_line_ids">
                         <list editable="bottom">
                             <field name="sequence" widget="handle"/>
@@ -74,7 +75,8 @@
                         </list>
                     </field>
                 </page>
-                <page string="Semi Finished Goods QC Parameters" name="semi_finished_quality_parameters" invisible="product_type_custom == 'raw'">
+                <page string="Semi Finished Goods QC Parameters" name="semi_finished_quality_parameters"
+                      invisible="product_type_custom in ['raw','packaging','finished']">
                     <field name="semi_fg_specs">
                         <list editable="bottom">
                             <field name="sequence" widget="handle"/>
@@ -85,7 +87,19 @@
                         </list>
                     </field>
                 </page>
-                <page string="Finished Goods QC Parameters" name="finished_quality_parameters" invisible="product_type_custom == 'raw'">
+                <page string="Packaging Finished Goods QC Parameters" name="semi_finished_quality_parameters"
+                      invisible="product_type_custom in ['raw','semi','finished']">
+                    <field name="packaging_material_specs">
+                        <list editable="bottom">
+                            <field name="sequence" widget="handle"/>
+                            <field name="parameter_id"/>
+                            <field name="condition"/>
+                            <field name="specification"/>
+                        </list>
+                    </field>
+                </page>
+                <page string="Finished Goods QC Parameters" name="finished_quality_parameters"
+                      invisible="product_type_custom in ['raw','packaging','semi']">
                     <field name="fg_specs">
                         <list editable="bottom">
                             <field name="sequence" widget="handle"/>
@@ -97,7 +111,7 @@
                     </field>
                 </page>
 
-                <page string="Colors" name="colors">
+                <page string="Colors" name="colors" invisible="product_type_custom == 'packaging'">
                     <field name="color_parameter_ids">
                         <list editable="bottom">
                             <field name="name"/>
