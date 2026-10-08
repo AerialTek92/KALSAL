@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="action_report_swab" model="ir.actions.report">
+        <field name="name">Swab Testing Report</field>
+        <field name="model">swab.testing.report</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">fk_swab_testing.report_swab</field>
+        <field name="report_file">fk_swab_testing.report_swab</field>
+        <field name="print_report_name">'Swab Report - %s' % (object.name or '').replace('/', '')</field>
+    </record>
+
+    <template id="report_swab">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.basic_layout">
+                    <div class="page">
+
+                        <!-- ============ LETTERHEAD + TOP-RIGHT DOC BLOCK ============ -->
+                        <table style="width:100%; border-collapse:collapse; margin-bottom:2px;">
+                            <tr>
+                                <td style="width:78%; padding:0; vertical-align:top;">
+                                    <table style="width:100%; border-collapse:collapse;">
+                                        <tr>
+                                            <td style="width:28%; border:1px solid black; padding:6px;
+                                                       text-align:center; vertical-align:middle;">
+                                                <img t-if="o.company_id.logo"
+                                                     t-att-src="image_data_uri(o.company_id.logo)"
+                                                     style="max-height:55px; max-width:100%; display:block; margin:0 auto;"
+                                                     alt="Company Logo"/>
+                                            </td>
+                                            <td style="width:44%; border:1px solid black; padding:6px;
+                                                       text-align:center; vertical-align:middle;">
+                                                <div style="font-size:20px; font-weight:bold;">
+                                                    <span t-field="o.company_id.name"/>
+                                                </div>
+                                                <div style="font-size:11px;">
+                                                    <span t-field="o.company_id.partner_id.street"/>,
+                                                    <span t-field="o.company_id.partner_id.city"/>
+                                                </div>
+                                            </td>
+                                            <td style="width:28%; border:1px solid black; padding:6px;
+                                                       text-align:center; vertical-align:middle;">
+                                                <div style="font-size:26px; font-weight:bold; letter-spacing:2px;">CELAKT</div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="3" style="border:1px solid black; text-align:center; padding:6px 0;">
+                                                <div style="display:inline-block; border:2px solid black;
+                                                            padding:4px 40px; font-size:15px; font-weight:bold;">
+                                                    Swab Testing Report
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                                <!-- TOP-RIGHT: Report No + Effective Date (no Rev) -->
+                                <td style="width:22%; border:1px solid black; padding:0;
+                                           vertical-align:top; font-size:10px;">
+                                    <div style="padding:5px; border-bottom:1px solid black;">
+                                        <strong>Report No:</strong> <span t-field="o.name"/>
+                                    </div>
+                                    <div style="padding:5px;">
+                                        <strong>Effective Date:</strong> <span t-field="o.effective_date"/>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- ============ SAMPLING INFO ============ -->
+                        <table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:8px;">
+                            <tr>
+                                <td style="width:70%; border:1px solid black; padding:4px;">
+                                    <strong>Sampling information (if Any):</strong>
+                                    <span t-field="o.sampling_information"/>
+                                </td>
+                                <td style="width:30%; border:1px solid black; padding:4px;">
+                                    <strong>Sample Condition:</strong>
+                                    <span t-field="o.sample_condition"/>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid black; padding:4px;">
+                                    <strong>Temp:</strong>
+                                    <span t-esc="'%g' % o.temperature"/>°C
+                                </td>
+                                <td style="border:1px solid black; padding:4px;"></td>
+                            </tr>
+                        </table>
+
+                        <!-- ============ RESULTS TABLE ============ -->
+                        <div style="text-align:center; font-weight:bold; font-size:11px;
+                                    border:1px solid black; border-bottom:none; padding:3px;">
+                            MICROBIOLOGICAL TESTING RESULTS
+                        </div>
+                        <table style="width:100%; border-collapse:collapse; font-size:8.5px; text-align:center;">
+                            <tr style="font-weight:bold;">
+                                <td style="border:1px solid black; padding:3px; width:3%;">S. No.</td>
+                                <td style="border:1px solid black; padding:3px; width:8%;">Sampling/ Receiving Date</td>
+                                <td style="border:1px solid black; padding:3px; width:8%;">Testing Date</td>
+                                <td style="border:1px solid black; padding:3px; width:9%;">Customer / Location</td>
+                                <td style="border:1px solid black; padding:3px; width:9%;">Product Name</td>
+                                <td style="border:1px solid black; padding:3px; width:6%;">Batch</td>
+                                <td style="border:1px solid black; padding:3px; width:8%;">Total Bacterial Count (cfu/gm)</td>
+                                <td style="border:1px solid black; padding:3px; width:7%;">S.aureus (cfu/gm)</td>
+                                <td style="border:1px solid black; padding:3px; width:7%;">Total Coliforms (cfu/gm)</td>
+                                <td style="border:1px solid black; padding:3px; width:7%;">Mold/Yeast Count (cfu/gm)</td>
+                                <td style="border:1px solid black; padding:3px; width:7%;">E.coli (cfu/gm)</td>
+                                <td style="border:1px solid black; padding:3px; width:7%;">Salmonella (/25g)</td>
+                                <td style="border:1px solid black; padding:3px; width:8%;">Performed By</td>
+                                <td style="border:1px solid black; padding:3px; width:8%;">Reporting Date</td>
+                                <td style="border:1px solid black; padding:3px; width:8%;">Remarks / Status</td>
+                            </tr>
+                            <t t-foreach="o.line_ids" t-as="line">
+                                <tr>
+                                    <td style="border:1px solid black; padding:3px;"><span t-esc="line_index + 1"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.sampling_receiving_date"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.testing_date"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.customer_location"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.product_id.display_name"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.batch_id.name"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.total_bacterial_count"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.s_aureus"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.total_coliforms"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.mold_yeast_count"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.e_coli"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.salmonella"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.performed_by.name"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.reporting_date"/></td>
+                                    <td style="border:1px solid black; padding:3px;"><span t-field="line.remarks_status"/></td>
+                                </tr>
+                            </t>
+                        </table>
+
+                        <!-- ============ CONCLUSION SECTION (heading + fields beneath) ============ -->
+                        <table style="width:100%; border-collapse:collapse; font-size:10px; margin-top:8px;">
+                            <tr>
+                                <td colspan="2" style="border:1px solid black; padding:4px; font-weight:bold;">
+                                    N/R= Not required&#160;&#160;&#160;N/A= Not available
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" style="border:1px solid black; padding:4px; font-weight:bold;">
+                                    Conclusion:
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" style="border:1px solid black; padding:4px; font-weight:bold;">
+                                    Note: The above result and conclusion is valid only for the sample tested.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="width:45%; border:1px solid black; padding:4px; font-weight:bold;">
+                                    State if there is any deviation from testing or sampling methods:
+                                </td>
+                                <td style="width:55%; border:1px solid black; padding:4px;">
+                                    <span t-field="o.deviation_from_methods"/>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid black; padding:4px; font-weight:bold;">
+                                    Result of Measurement Uncertainty if any:
+                                </td>
+                                <td style="border:1px solid black; padding:4px;">
+                                    <span t-field="o.measurement_uncertainty"/>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid black; padding:4px; font-weight:bold;">
+                                    Any interpretation of Test Result or Additional Information:
+                                </td>
+                                <td style="border:1px solid black; padding:4px;">
+                                    <span t-field="o.interpretation_additional"/>
+                                </td>
+                            </tr>
+                        </table>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>

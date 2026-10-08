@@ -128,9 +128,6 @@ class MrpProduction(models.Model):
         """
         return True
 
-    def action_assign(self):
-        pass
-
     def action_assign_lots_to_mo_lines(self):
         StockQuant = self.env['stock.quant']
         StockMoveLine = self.env['stock.move.line']
@@ -344,6 +341,10 @@ class MrpProduction(models.Model):
             related_mos_in_self.write({'x_budget_analytic_id': budget.id})
             sale_order.x_budget_id = budget.id
 
+            # FREEZE: never rebuild once the budget is approved, cancelled, or has a PR
+            if budget.state in ('approved', 'cancel') or budget.requisition_id:
+                continue
+
             all_related_mos = self.env['mrp.production'].search([('origin', 'ilike', so_name)])
 
             consolidated_products = {}
@@ -446,33 +447,6 @@ class MrpProduction(models.Model):
         self.action_assign_lots_to_mo_lines()
         self._generate_forecast_budget()
 
-    def write(self, vals):
-        if any(f in vals for f in ['move_raw_ids', 'product_qty', 'qty_producing']):
-            products = self.move_raw_ids.mapped('product_id')
-            if products:
-                self.env.cr.execute(
-                    "SELECT id FROM product_product WHERE id IN %s FOR UPDATE",
-                    (tuple(products.ids),)
-                )
-        res = super(MrpProduction, self).write(vals)
-
-        if any(f in vals for f in ['move_raw_ids', 'product_qty', 'qty_producing']):
-            self._generate_forecast_budget()
-
-            if not self.env.context.get('skip_stock_enforcement'):
-                for mo in self.with_context(skip_stock_enforcement=True):
-                    tracked_moves = mo.move_raw_ids.filtered(
-                        lambda m: m.product_id.tracking in ('lot', 'serial') and m.state not in ('done', 'cancel')
-                    )
-                    untracked_moves = mo.move_raw_ids - tracked_moves
-
-                    tracked_moves._clear_unbacked_consumption()
-                    mo.action_assign_lots_to_mo_lines()
-                    untracked_moves._cap_consumed_to_available_stock()
-
-        return res
-
-
     @api.model_create_multi
     def create(self, vals_list):
         productions = super(MrpProduction, self).create(vals_list)
@@ -484,6 +458,9 @@ class StockMove(models.Model):
     _inherit = 'stock.move'
     # Removed store=True so it changes "time to time" with stock/demand
     x_items_short = fields.Float(string='Shortness', compute='_compute_shortness')
+
+    product_uom_qty = fields.Float(digits=(16, 4))
+    product_qty = fields.Float(digits=(16, 8))
 
     def _is_relevant(self, move):
         """
@@ -529,6 +506,7 @@ class StockMove(models.Model):
                 ('product_id', '=', product.id),
                 ('raw_material_production_id', '!=', False),
                 ('state', 'not in', ('done', 'cancel')),
+                ('raw_material_production_id.x_budget_analytic_id.state', '!=', 'approved'),
             ]).filtered(lambda m: self._is_relevant(m))
 
             # FIFO priority key, resilient to field-name differences across versions.

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Microbiological checkbox inside the standalone QC Parameter windows
+         (Approach A). Lives HERE because fk_finished_qc owns the
+         is_microbiological field; am_kalsal_quality must not reference it. -->
+
+    <!-- Raw Material standalone window -->
+    <record id="view_raw_qc_param_line_standalone_micro" model="ir.ui.view">
+        <field name="name">product.quality.parameter.line.standalone.micro</field>
+        <field name="model">product.quality.parameter.line</field>
+        <field name="inherit_id" ref="am_kalsal_quality.view_raw_qc_param_line_standalone"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='condition']" position="after">
+                <field name="is_microbiological"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Finished Goods standalone window -->
+    <record id="view_finished_qc_param_line_standalone_micro" model="ir.ui.view">
+        <field name="name">finished.quality.parameter.line.standalone.micro</field>
+        <field name="model">finished.quality.parameter.line</field>
+        <field name="inherit_id" ref="am_kalsal_quality.view_finished_qc_param_line_standalone"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='condition']" position="after">
+                <field name="is_microbiological"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

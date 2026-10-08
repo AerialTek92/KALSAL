@@ -3,7 +3,7 @@
     <menuitem id="menu_material_requisition_root"
               name="Material Requisition"
               sequence="20"
-              web_icon="kalsal_pr_slip,static/description/icon.png"/>
+              web_icon="kalsal_pr_slip,static/description/icon.png" groups="fk_kalsal_security.group_executor_production"/>
 
     <menuitem id="menu_material_requisition_slip"
               name="Requisition Slips"

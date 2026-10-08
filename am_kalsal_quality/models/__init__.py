@@ -5,3 +5,4 @@ from . import global_qc_params
 from . import product_product
 from . import return_picking
 from . import line_clearance
+from . import qc_param_manager

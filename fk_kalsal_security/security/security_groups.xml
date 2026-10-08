@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- ========================================== -->
+        <!-- 1. CENTRALIZED SECURITY CATEGORY           -->
+        <!-- ========================================== -->
+        <record id="module_category_kalsal_operations" model="ir.module.category">
+            <field name="name">KalSal Operations</field>
+            <field name="description">Unified access control for KalSal manufacturing and quality operations</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <!-- ========================================== -->
+        <!-- 2. PRIVILEGE CONTAINERS (Odoo 19 Style)   -->
+        <!-- ========================================== -->
+        <record id="privilege_kalsal_executor" model="res.groups.privilege">
+            <field name="name">Executor</field>
+            <field name="category_id" ref="module_category_kalsal_operations"/>
+            <field name="sequence">10</field>
+        </record>
+        <record id="privilege_kalsal_management" model="res.groups.privilege">
+            <field name="name">Management</field>
+            <field name="category_id" ref="module_category_kalsal_operations"/>
+            <field name="sequence">20</field>
+        </record>
+        <record id="privilege_kalsal_factory_admin" model="res.groups.privilege">
+            <field name="name">Factory Administrator</field>
+            <field name="category_id" ref="module_category_kalsal_operations"/>
+            <field name="sequence">30</field>
+        </record>
+
+        <!-- ========================================== -->
+        <!-- 3. EXECUTOR GROUPS (Tier 1)               -->
+        <!-- ========================================== -->
+
+        <!-- Procurement Executor: Purchase rights + Product Create capability -->
+        <record id="group_executor_procurement" model="res.groups">
+            <field name="name">Executor: Procurement</field>
+            <field name="privilege_id" ref="privilege_kalsal_executor"/>
+            <field name="implied_ids" eval="[
+                (4, ref('base.group_user')),
+                (4, ref('mrp.group_mrp_user')),
+                (4, ref('purchase.group_purchase_manager')),
+                (4, ref('product.group_product_manager')),
+            ]"/>
+        </record>
+
+        <!-- Stores Executor: Gets Standard Inventory User Rights -->
+        <record id="group_executor_stores" model="res.groups">
+            <field name="name">Executor: Stores</field>
+            <field name="privilege_id" ref="privilege_kalsal_executor"/>
+            <field name="implied_ids" eval="[
+                (4, ref('base.group_user')),
+                (4, ref('stock.group_stock_user'))
+            ]"/>
+        </record>
+
+        <!-- Production Executor: Gets Standard Manufacturing User Rights -->
+        <record id="group_executor_production" model="res.groups">
+            <field name="name">Executor: Production</field>
+            <field name="privilege_id" ref="privilege_kalsal_executor"/>
+            <field name="implied_ids" eval="[
+                (4, ref('base.group_user')),
+                (4, ref('mrp.group_mrp_user'))
+            ]"/>
+        </record>
+
+        <!-- Finance Executor: Gets Standard Accounting User Rights -->
+        <record id="group_executor_finance" model="res.groups">
+            <field name="name">Executor: Finance</field>
+            <field name="privilege_id" ref="privilege_kalsal_executor"/>
+            <field name="implied_ids" eval="[
+                (4, ref('base.group_user')),
+                (4, ref('account.group_account_user')),
+
+            ]"/>
+        </record>
+
+        <!-- ========================================== -->
+        <!-- 4. MANAGEMENT GROUPS (Tier 2)             -->
+        <!-- ========================================== -->
+
+        <!-- Management: Sales (Inherits Procurement + Standard Sales Rights) -->
+        <!-- REMOVED: am_so_to_mrp.group_budget_approver to prevent unwanted Quality/R&D inheritance -->
+        <record id="group_management_sales" model="res.groups">
+            <field name="name">Management: Sales</field>
+            <field name="privilege_id" ref="privilege_kalsal_management"/>
+            <field name="implied_ids" eval="[
+                (4, ref('sales_team.group_sale_manager'))
+            ]"/>
+        </record>
+
+        <!-- Management: Finance (Inherits Finance Executor) -->
+        <record id="group_management_finance" model="res.groups">
+            <field name="name">Management: Finance</field>
+            <field name="privilege_id" ref="privilege_kalsal_management"/>
+            <field name="implied_ids" eval="[(4, ref('group_executor_finance')),(4, ref('purchase.group_purchase_user'))
+]"/>
+
+        </record>
+
+        <!-- Management: Quality (Inherits Stores + Legacy Quality User) -->
+        <record id="group_management_quality" model="res.groups">
+            <field name="name">Management: Quality</field>
+            <field name="privilege_id" ref="privilege_kalsal_management"/>
+            <field name="implied_ids" eval="[
+                (4, ref('stock.group_stock_user')),
+                (4, ref('am_kalsal_quality.group_quality_user')),
+                (4, ref('am_kalsal_quality.group_quality_viewer'))
+            ]"/>
+        </record>
+
+        <!-- Management: R&D (Inherits Stock + Legacy R&D Approver) -->
+        <record id="group_management_rd" model="res.groups">
+            <field name="name">Management: R&amp;D</field>
+            <field name="privilege_id" ref="privilege_kalsal_management"/>
+            <field name="implied_ids" eval="[
+                (4, ref('stock.group_stock_user')),
+                (4, ref('mrp.group_mrp_manager')),
+                (4, ref('rd_module.group_rnd_user')),
+                (4, ref('product.group_product_manager'))
+            ]"/>
+        </record>
+
+        <!-- Management: Operations (Inherits Production) -->
+        <!-- Management: Operations (Inherits Production, Quality, Procurement, Petty Cash + TECO access) -->
+        <record id="group_operations" model="res.groups">
+            <field name="name">Management: Operations</field>
+            <field name="privilege_id" ref="privilege_kalsal_management"/>
+            <field name="implied_ids" eval="[
+        (4, ref('group_executor_production')),
+        (4, ref('group_management_quality')),
+        (4, ref('mrp.group_mrp_user')),
+        (4, ref('purchase.group_purchase_manager')),
+    ]"/>
+            <field name="comment">Operations: Production, Quality, PR/PO, Petty Cash, and Technical Closing (TECO) in a
+                single role.
+            </field>
+        </record>
+
+        <!-- ========================================== -->
+        <!-- 5. TOP MANAGEMENT (Tier 3)                -->
+        <!-- ========================================== -->
+
+        <!-- Factory Administrator (ADMN01) - RESET TO EXECUTORS ONLY -->
+        <record id="group_factory_admin" model="res.groups">
+            <field name="name">Factory Administrator</field>
+            <field name="privilege_id" ref="privilege_kalsal_factory_admin"/>
+            <field name="implied_ids" eval="[
+                (4, ref('group_management_sales')),
+                (4, ref('group_management_finance')),
+                (4, ref('am_so_to_mrp.group_budget_approver')),
+                (4, ref('rd_module.group_rnd_user')),
+                (4, ref('rd_module.group_rnd_approver')),
+
+
+            ]"/>
+            <field name="comment">Factory Administrator: Core production management, sales, and financial controls.
+            </field>
+        </record>
+
+        <!-- CEO (CEO01) - Absolute System Oversight -->
+        <record id="group_ceo" model="res.groups">
+            <field name="name">CEO</field>
+            <field name="privilege_id" ref="privilege_kalsal_factory_admin"/>
+            <field name="implied_ids" eval="[
+                (4, ref('group_factory_admin')),
+                (4, ref('rd_module.group_rnd_approver')),
+                (4, ref('group_executor_procurement')),
+                (4, ref('group_executor_stores')),
+                (4, ref('base.group_system')),
+                (4, ref('am_kalsal_quality.group_quality_user')),
+                (4, ref('am_kalsal_quality.group_quality_viewer')),
+                (4, ref('am_so_to_mrp.group_budget_approver')),
+                (4, ref('rd_module.group_rnd_user')),
+                (4, ref('rd_module.group_rnd_approver')),
+            ]"/>
+            <field name="comment">CEO: Full system access including all factory operations and Odoo Settings.</field>
+        </record>
+    </data>
+</odoo>

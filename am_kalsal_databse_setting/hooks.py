@@ -9,14 +9,26 @@ def post_init_hook(env):
     """
     # 1. Enable Global App Settings
     config = env['res.config.settings'].create({
-        'group_stock_multi_locations': True,  # Activates Storage Locations
-        'group_stock_adv_location': True,  # Activates Multi-Step Routes Checkbox
-        'group_stock_production_lot': True,  # Activates Lots and Serial Numbers
-        'group_mrp_byproducts': True,  # Activates By-Products
-        'group_mrp_routings': True,  # Activates Advanced Work Orders / Routings
-        'group_unlocked_by_default': True,  # ENABLES THE 'UNLOCK MANUFACTURING ORDERS' CHECKBOX
+        'group_stock_multi_locations': True,
+        'group_stock_adv_location': True,
+        'group_stock_production_lot': True,
+        'group_mrp_byproducts': True,
+        'group_mrp_routings': True,
+        'group_unlocked_by_default': True,
+        'group_uom': True,
     })
     config.execute()
+
+    company = env.company
+
+    pkr_currency = env['res.currency'].search([
+        ('name', '=', 'PKR')
+    ], limit=1)
+
+    if pkr_currency:
+        company.write({
+            'currency_id': pkr_currency.id,
+        })
 
     # 2. Force Access Groups Refresh for internal users to show multi-step menus immediately
     try:

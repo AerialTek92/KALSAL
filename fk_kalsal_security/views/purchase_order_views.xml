@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_purchase_order_form_finance_restrict" model="ir.ui.view">
+        <field name="name">purchase.order.form.finance.restrict</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+
+            <!-- 1. INJECT HIDDEN COMPUTED FIELD -->
+            <!-- We place it at the very top of the sheet so it's available for all attributes below -->
+            <xpath expr="//sheet" position="before">
+                <field name="is_finance_user" invisible="1"/>
+            </xpath>
+
+            <!-- 2. RESTRICT HEADER FIELDS -->
+            <xpath expr="//field[@name='partner_id']" position="attributes">
+                <attribute name="readonly">is_finance_user</attribute>
+            </xpath>
+            <xpath expr="//field[@name='date_order']" position="attributes">
+                <attribute name="readonly">is_finance_user</attribute>
+            </xpath>
+            <xpath expr="//field[@name='date_approve']" position="attributes">
+                <attribute name="readonly">is_finance_user</attribute>
+            </xpath>
+            <xpath expr="//field[@name='origin']" position="attributes">
+                <attribute name="readonly">is_finance_user</attribute>
+            </xpath>
+
+            <!-- 3. RESTRICT THE ORDER LINES (Products Tab) -->
+            <!-- This prevents Finance from adding/removing products or changing quantities -->
+            <xpath expr="//field[@name='order_line']" position="attributes">
+                <attribute name="readonly">is_finance_user</attribute>
+            </xpath>
+
+            <!-- 4. RESTRICT OTHER INFORMATION TAB -->
+            <xpath expr="//page[@name='purchase_delivery_invoice']/group/group/field[@name='payment_term_id']" position="attributes">
+                <!-- Ensure Payment Terms is explicitly editable for Finance -->
+                <attribute name="readonly">0</attribute>
+            </xpath>
+
+            <!-- Make other fields in 'Other Information' readonly for Finance -->
+            <xpath expr="//field[@name='incoterm_id']" position="attributes">
+                <attribute name="readonly">is_finance_user</attribute>
+            </xpath>
+            <xpath expr="//field[@name='currency_id']" position="attributes">
+                <attribute name="readonly">is_finance_user</attribute>
+            </xpath>
+
+        </field>
+    </record>
+</odoo>

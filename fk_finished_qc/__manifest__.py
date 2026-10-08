@@ -16,6 +16,8 @@
         'security/ir.model.access.csv',
         'data/sequence.xml',
         'views/finished_qc_views.xml',
+        'views/qc_param_standalone_micro_views.xml',
+        'views/raw_qc_micro_views.xml',
         'views/product_template_views.xml',   # ← NEW
     ],
     'installable': True,

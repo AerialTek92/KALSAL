@@ -17,6 +17,7 @@
         'data/sequence.xml',
         'data/ir_cron_data.xml',
         'views/vehicle_inspection.xml',
+        'views/qc_param_manager_views.xml',
         'views/line_clearance_view.xml',
         'views/return_picking.xml',
         'views/custom_quality_check.xml',

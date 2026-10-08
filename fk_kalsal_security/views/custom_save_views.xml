@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ========================================== -->
+    <!-- GLOBAL CUSTOM SAVE BUTTON                 -->
+    <!-- One record per form. The method itself    -->
+    <!-- lives on models.Model (base_custom_save)  -->
+    <!-- ========================================== -->
+
+    <!-- 1. INTERNAL TRANSFERS / ALL PICKINGS -->
+    <record id="view_picking_form_custom_save" model="ir.ui.view">
+        <field name="name">stock.picking.form.custom.save</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//form/header/button[1]" position="before">
+                <button name="action_custom_save" string="Save"
+                        type="object" class="oe_highlight"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 2. SALE ORDER -->
+    <record id="view_order_form_custom_save" model="ir.ui.view">
+        <field name="name">sale.order.form.custom.save</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//form/header/button[1]" position="before">
+                <button name="action_custom_save" string="Save"
+                        type="object" class="oe_highlight"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 3. MIXING SLIP -->
+    <record id="view_mixing_slip_form_custom_save" model="ir.ui.view">
+        <field name="name">mixing.slip.form.custom.save</field>
+        <field name="model">mixing.slip</field>
+        <field name="inherit_id" ref="fk_mixing_slip.view_mixing_slip_form"/>  <!-- ← REPLACE placeholder here -->
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//form/header/button[1]" position="before">
+                <button name="action_custom_save" string="Save"
+                        type="object" class="oe_highlight"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 4. PURCHASE ORDER (PO) -->
+    <record id="view_purchase_order_form_custom_save" model="ir.ui.view">
+        <field name="name">purchase.order.form.custom.save</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//form/header/button[1]" position="before">
+                <button name="action_custom_save" string="Save"
+                        type="object" class="oe_highlight"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 5. TECO PRODUCTION -->
+    <record id="view_teco_production_form_custom_save" model="ir.ui.view">
+        <field name="name">teco.production.form.custom.save</field>
+        <field name="model">teco.production</field>
+        <field name="inherit_id" ref="am_kalsal_teco.teco_production_form_view"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <!-- TECO has no <header> — create one as the first child of <form>,
+                 then place the Save button inside it -->
+            <xpath expr="//form/sheet" position="before">
+                <header>
+                    <button name="action_custom_save" string="Save"
+                            type="object" class="oe_highlight"/>
+                </header>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 6. RAW MATERIAL QC (kalsal.quality.check) -->
+    <record id="view_kalsal_quality_check_form_custom_save" model="ir.ui.view">
+        <field name="name">kalsal.quality.check.form.custom.save</field>
+        <field name="model">kalsal.quality.check</field>
+        <!-- TODO: replace with probe output, e.g. am_kalsal_quality.view_kalsal_quality_check_form -->
+        <field name="inherit_id" ref="am_kalsal_quality.view_kalsal_quality_check_form"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//form/header/button[1]" position="before">
+                <button name="action_custom_save" string="Save"
+                        type="object" class="oe_highlight"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 7. LINE CLEARANCE -->
+    <record id="view_line_clearance_form_custom_save" model="ir.ui.view">
+        <field name="name">line.clearance.form.custom.save</field>
+        <field name="model">line.clearance</field>
+        <!-- TODO: replace with probe output, e.g. am_kalsal_quality.view_line_clearance_form -->
+        <field name="inherit_id" ref="am_kalsal_quality.view_line_clearance_form"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//form/header/button[1]" position="before">
+                <button name="action_custom_save" string="Save"
+                        type="object" class="oe_highlight"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 8. SEMI-FINISHED QC -->
+    <record id="view_semi_finished_qc_form_custom_save" model="ir.ui.view">
+        <field name="name">semi.finished.qc.form.custom.save</field>
+        <field name="model">semi.finished.qc</field>
+        <field name="inherit_id" ref="fk_semi_finished_qc.view_semi_finished_qc_form"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//form/header/button[1]" position="before">
+                <button name="action_custom_save" string="Save"
+                        type="object" class="oe_highlight"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 9. FINISHED GOODS QC -->
+    <record id="view_finished_qc_form_custom_save" model="ir.ui.view">
+        <field name="name">finished.qc.form.custom.save</field>
+        <field name="model">finished.qc</field>
+        <field name="inherit_id" ref="fk_finished_qc.view_finished_qc_form"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//form/header/button[1]" position="before">
+                <button name="action_custom_save" string="Save"
+                        type="object" class="oe_highlight"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 10. REWORK SLIP -->
+    <record id="view_kalsal_rework_sheet_form_custom_save" model="ir.ui.view">
+        <field name="name">kalsal.rework.sheet.form.custom.save</field>
+        <field name="model">kalsal.rework.sheet</field>
+        <field name="inherit_id" ref="fk_kalsal_rework_slip.view_kalsal_rework_sheet_form"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <!-- Insert INTO the existing header, just left of the statusbar -->
+            <xpath expr="//form/header/field[@name='state']" position="before">
+                <button name="action_custom_save" string="Save"
+                        type="object" class="oe_highlight"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

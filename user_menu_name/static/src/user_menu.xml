@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-inherit="web.UserMenu" t-inherit-mode="extension">
+        <xpath expr="//small[hasclass('oe_topbar_name')]" position="attributes">
+            <attribute name="t-att-class">{'d-lg-inline-block': true}</attribute>
+        </xpath>
+        <xpath expr="//small[hasclass('oe_topbar_name')]/mark" position="attributes">
+            <attribute name="class">d-none</attribute>
+        </xpath>
+    </t>
+</templates>

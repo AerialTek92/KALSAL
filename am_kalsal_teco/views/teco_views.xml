@@ -51,7 +51,7 @@
                             <page string="Material Issuance">
                                 <field name="material_issuance_line_ids">
                                     <list editable="bottom" create="0">
-                                        <field name="order_qty_required_kgs" width="auto"/>
+                                        <field name="order_qty_required_kgs" width="auto" string="Total Box Qty"/>
                                         <field name="material_issue" width="auto"/>
                                         <field name="total_produced_qty"/>
                                         <field name="scrap_percentage" widget="percentage" readonly="1" width="auto"/>
@@ -92,6 +92,8 @@
                                     <list editable="bottom" create="0">
                                         <field name="prod_in_units" width="auto"/>
                                         <field name="total_capacity" width="auto"/>
+                                        <field name="no_of_days" width="auto"/>
+                                        <field name="total_consumption" width="auto"/>
                                         <field name="global_efficiency" widget="percentage" readonly="1" width="auto"/>
                                         <field name="reason_low_prod" width="auto"/>
                                     </list>
@@ -145,6 +147,6 @@
 
         <!-- Menu -->
         <menuitem id="menu_teco_production" name="TECO Production" parent="mrp.menu_mrp_root"
-                  action="action_teco_production" sequence="35"/>
+                  action="action_teco_production" sequence="35" groups="fk_kalsal_security.group_executor_production,fk_kalsal_security.group_operations"/>
     </data>
 </odoo>

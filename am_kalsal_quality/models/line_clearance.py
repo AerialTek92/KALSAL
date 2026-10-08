@@ -91,11 +91,15 @@ class LineClearance(models.Model):
         for rec in self:
             batch = False
             if rec.sale_order_id and rec.product_id:
+                # Search for the latest DONE Manufacturing Order
                 mo = self.env['mrp.production'].search([
                     ('origin', '=', rec.sale_order_id.name),
-                    ('product_id', '=', rec.product_id.id)
-                ], limit=1)
-                if mo:
+                    ('product_id', '=', rec.product_id.id),
+                    ('state', '=', 'done')  # Restricts to Done MOs only
+                ], order='date_finished desc, create_date desc', limit=1)
+
+                # Safely fetch the produced lot record
+                if mo and mo.lot_producing_ids:
                     batch = mo.lot_producing_ids.id
 
             rec.batch_no = batch

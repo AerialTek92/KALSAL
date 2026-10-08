@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_swab_testing_report_user,swab.testing.report.user,model_swab_testing_report,base.group_user,1,1,1,1
+access_swab_testing_line_user,swab.testing.line.user,model_swab_testing_line,base.group_user,1,1,1,1

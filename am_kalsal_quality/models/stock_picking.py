@@ -1,10 +1,12 @@
 from datetime import datetime
-from odoo import models, fields, api,_
+from odoo import models, fields, api, _
 from odoo.exceptions import UserError
-
+from markupsafe import Markup
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
+    _order = "id desc"
+
 
     def action_print_grn(self):
         """One-click PDF of the custom Goods Receipt Note."""
@@ -81,13 +83,146 @@ class StockPicking(models.Model):
             picking.previous_transfer_id = prev_pick.id if prev_pick else False
             picking.linked_purchase_id = po.id if po else False
 
+
+    is_dest_wh_stock = fields.Boolean(
+        string='Is Destination WH/Stock',
+        compute='_compute_is_dest_wh_stock'
+    )
+
+    def _get_group_partners(self, group_xmlid):
+        """Resolve a security group to its member partners, excluding Factory
+        Admin/CEO and Operations users — they inherit Store/Quality/Procurement
+        access as part of their broader role, but shouldn't be pulled into
+        department-level operational notifications meant for the actual
+        executors."""
+        target_group = self.env.ref(group_xmlid, raise_if_not_found=False)
+        if not target_group:
+            return self.env['res.partner']
+
+        excluded_groups = self.env['res.groups']
+        for xmlid in ('fk_kalsal_security.group_factory_admin', 'fk_kalsal_security.group_operations'):
+            grp = self.env.ref(xmlid, raise_if_not_found=False)
+            if grp:
+                excluded_groups |= grp
+
+        users = self.env['res.users'].search([('all_group_ids', 'in', [target_group.id])])
+        if excluded_groups:
+            users = users.filtered(lambda u: not (u.all_group_ids & excluded_groups))
+        return users.mapped('partner_id')
+
+    def _get_current_base_url(self):
+        """URL of the server actually handling this request. Falls back to
+        detecting the machine's live network IP when there's no HTTP request
+        context (e.g. a cron job), so links work whether Odoo is reached via
+        localhost, a changing LAN IP, or a fixed production domain."""
+        try:
+            from odoo.http import request
+            if request:
+                return request.httprequest.host_url.rstrip('/')
+        except RuntimeError:
+            pass
+
+        import socket
+        ip = '127.0.0.1'
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(('8.8.8.8', 80))
+                ip = s.getsockname()[0]
+            finally:
+                s.close()
+        except OSError:
+            pass
+
+        port = self.env['ir.config_parameter'].sudo().get_param('http_port') or '8069'
+        return f'http://{ip}:{port}'
+
+    def _notify_partners(self, partners, title, plain_msg, html_msg):
+        if not partners:
+            return
+        notify_ctx = dict(self.env.context, mail_notify_force_send=False)
+        for picking in self:
+            if hasattr(picking, 'message_notify'):
+                picking.with_context(notify_ctx).message_notify(
+                    partner_ids=partners.ids, body=html_msg, subject=title
+                )
+            else:
+                self.env['mail.thread'].with_context(notify_ctx).message_notify(
+                    model='stock.picking', res_id=picking.id,
+                    partner_ids=partners.ids, body=html_msg, subject=title
+                )
+            for partner in partners:
+                self.env['bus.bus']._sendone(
+                    partner, 'simple_notification',
+                    {'type': 'warning', 'title': title, 'message': plain_msg, 'sticky': True}
+                )
+
+    def _notify_store_users_grn_generated(self):
+        target_partners = self._get_group_partners('fk_kalsal_security.group_executor_stores')
+        if not target_partners:
+            return
+
+        base_url = self._get_current_base_url()
+        for picking in self:
+            url = f"{base_url}/web#id={picking.id}&model=stock.picking&view_type=form"
+            title = _("Goods Receipt Note Generated")
+            plain_msg = _(
+                "GRN %s has been generated for a confirmed Purchase Order. "
+                "Kindly proceed to inspect the vehicle upon arrival."
+            ) % picking.name
+            html_msg = Markup(_(
+                "GRN <b>%s</b> has been generated for a confirmed Purchase Order.<br/><br/>"
+                "Kindly proceed to inspect the vehicle upon arrival. "
+                "<a href='%s' target='_blank'><b>Click here to open the GRN</b></a>."
+            )) % (picking.name, url)
+            picking._notify_partners(target_partners, title, plain_msg, html_msg)
+
+    def _notify_quality_users_inspection_created(self, inspection):
+        target_partners = self._get_group_partners('fk_kalsal_security.group_management_quality')
+        if not target_partners:
+            return
+
+        base_url = self._get_current_base_url()
+        for picking in self:
+            url = f"{base_url}/web#id={inspection.id}&model=vehicle.inspection&view_type=form"
+            title = _("Vehicle Inspection Required")
+            plain_msg = _(
+                "A vehicle has arrived for GRN %s and needs Vehicle Inspection."
+            ) % picking.name
+            html_msg = Markup(_(
+                "A vehicle has arrived for GRN <b>%s</b> and needs Vehicle Inspection.<br/><br/>"
+                "<a href='%s' target='_blank'><b>Click here to open the Vehicle Inspection</b></a>."
+            )) % (picking.name, url)
+            picking._notify_partners(target_partners, title, plain_msg, html_msg)
+
+    def _notify_store_users_qc_completed(self):
+        target_partners = self._get_group_partners('fk_kalsal_security.group_executor_stores')
+        if not target_partners:
+            return
+
+        base_url = self._get_current_base_url()
+        for picking in self:
+            url = f"{base_url}/web#id={picking.id}&model=stock.picking&view_type=form"
+            title = _("GRN Ready to Validate")
+            plain_msg = _(
+                "Quality Check is complete for GRN %s. Please validate the GRN to complete the transfer."
+            ) % picking.name
+            html_msg = Markup(_(
+                "Quality Check is complete for GRN <b>%s</b>.<br/><br/>"
+                "Please validate the GRN to complete the transfer. "
+                "<a href='%s' target='_blank'><b>Click here to open the GRN</b></a>."
+            )) % (picking.name, url)
+            picking._notify_partners(target_partners, title, plain_msg, html_msg)
+
+    # ------------------------------------------------------------------
     def button_inspect(self):
         self.ensure_one()
+        if not self.env.user.has_group('fk_kalsal_security.group_executor_stores'):
+            raise UserError(_("Access Denied: Only the Store department can trigger a Vehicle Inspection."))
         if self.vehicle_inspection_id:
             raise UserError("Inspection Already in Progress Kindly check the linked Vehicle Inspection Record.")
 
         material_names = ', '.join(self.move_ids.mapped('product_id').mapped('name'))
-
         inspection_vals = {
             'partner_id': self.partner_id.id if self.partner_id else False,
             'material_name': material_names,
@@ -98,20 +233,7 @@ class StockPicking(models.Model):
 
         inspection = self.env['vehicle.inspection'].create(inspection_vals)
         self.vehicle_inspection_id = inspection.id
-
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Vehicle Inspection',
-            'res_model': 'vehicle.inspection',
-            'res_id': inspection.id,
-            'view_mode': 'form',
-            'target': 'current',
-        }
-
-    is_dest_wh_stock = fields.Boolean(
-        string='Is Destination WH/Stock',
-        compute='_compute_is_dest_wh_stock'
-    )
+        self._notify_quality_users_inspection_created(inspection)
 
     def button_validate(self):
         # 1. PRE-VALIDATION CHECKS: Run these BEFORE calling super()
@@ -301,8 +423,8 @@ class StockPicking(models.Model):
 
             # Iterate over `move_ids` (the main demand lines) instead of `move_line_ids`
             for move in picking.move_ids:
-                if not move.quantity:
-                    raise UserError(_('Picking Product %s must have quantity.') % move.product_id.name)
+                # if not move.quantity:
+                #     raise UserError(_('Picking Product %s must have quantity.') % move.product_id.name)
                 if not move.product_id:
                     continue
 
@@ -403,11 +525,11 @@ class StockMove(models.Model):
             demand = move.product_uom_qty or 0.0
             done = move.quantity or 0.0
             if done < demand:
-                move.short_qty = int(demand - done)
+                move.short_qty = float(demand - done)
                 move.excess_qty = 0
             elif done > demand:
                 move.short_qty = 0
-                move.excess_qty = int(done - demand)
+                move.excess_qty = float(done - demand)
             else:
                 move.short_qty = 0
                 move.excess_qty = 0
@@ -417,25 +539,19 @@ class StockBackorderConfirmation(models.TransientModel):
     _inherit = 'stock.backorder.confirmation'
 
     def process(self):
-        # 1. Run the native Odoo backorder generation code first
         res = super(StockBackorderConfirmation, self).process()
 
-        # 2. Iterate through the wizard records
         for confirmation in self:
-            # FIX: Changed 'pickings_to_backorder' to 'pick_ids'
             for picking in confirmation.pick_ids:
-                # Find any newly generated child backorders referencing this picking
                 backorders = self.env['stock.picking'].search([
                     ('backorder_id', '=', picking.id)
                 ])
 
-                # 3. Apply your custom hold state to the split backorders
                 if backorders:
                     backorders.write({'state': 'vehicle_inspection'})
+                    backorders._notify_store_users_grn_generated()
 
-                    # Log audit history to the chatter
                     for bo in backorders:
                         bo.message_post(body="This backorder has been placed on Custom Hold.")
         return res
-
 

@@ -368,6 +368,7 @@ class KalsalQualityCheck(models.Model):
             incoming_picking.write({'state': 'qc_failed'})
         elif completed_qcs == total_products:
             incoming_picking.write({'state': 'assigned'})
+            incoming_picking._notify_store_users_qc_completed()
         else:
             incoming_picking.write({'state': 'qc_pending'})
 

@@ -36,7 +36,7 @@
 
                     <group string="Shipment Details">
                         <group>
-                            <field name="vehicle_id"/>
+                            <field name="vehicle_id" required="1"/>
                             <field name="partner_id"/>
                             <field name="material_name" readonly="1"/>
                         </group>
@@ -143,7 +143,7 @@
     <menuitem id="menu_vehicle_inspection_root"
               name="Quality Inspections"
               web_icon="am_kalsal_quality,static/description/icon.png"
-              sequence="15"/>
+              sequence="15" groups="fk_kalsal_security.group_management_quality"/>
 
     <menuitem id="menu_vehicle_inspection_all"
               name="All Inspections"

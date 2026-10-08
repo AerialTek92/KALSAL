@@ -2,6 +2,7 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from odoo.tools import float_compare
 from odoo.tools.float_utils import float_round
+from markupsafe import Markup
 
 
 import logging
@@ -51,6 +52,25 @@ class MaterialRequisitionSlip(models.Model):
              "tailoring and stays in sync with 'Qty Producing' on the "
              "linked Manufacturing Order, in both directions.")
 
+    qty_producing_with_wastage = fields.Float(
+        string='Qty Producing (incl. 2% Wastage)',
+        compute='_compute_qty_producing_with_wastage',
+        help="'Qty Producing' plus a fixed 2% buffer to cover material "
+             "wastage during mixing. This figure is used ONLY to calculate "
+             "the quantities on the Recipe Lines below — it does NOT "
+             "affect the Manufacturing Order, which stays tailored to the "
+             "exact 'Qty Producing' value above.")
+
+    @api.depends('qty_producing', 'state')
+    def _compute_qty_producing_with_wastage(self):
+        for rec in self:
+            # 1. Provide a fallback value so every record gets assigned
+            rec.qty_producing_with_wastage = rec.qty_producing or 0.0
+
+            # 2. Apply your conditional logic for the 'done' state
+            if rec.state != 'done':
+                rec.qty_producing_with_wastage = rec.qty_producing * 1.02
+
     produced_qty = fields.Float(
         string='Already Produced', compute='_compute_produced_remaining_qty',
         help="Sum of Qty Producing across this recipe's other "
@@ -86,6 +106,88 @@ class MaterialRequisitionSlip(models.Model):
     allowed_sale_order_ids = fields.Many2many(
         'sale.order', string='Sale Orders With Pending Requisition',
         compute='_compute_allowed_sale_order_ids')
+
+    def _get_current_base_url(self):
+        """URL of the server actually handling this request, falling back to
+        detecting the machine's live network IP when there's no HTTP request
+        context (e.g. a cron job)."""
+        try:
+            from odoo.http import request
+            if request:
+                return request.httprequest.host_url.rstrip('/')
+        except RuntimeError:
+            pass
+
+        import socket
+        ip = '127.0.0.1'
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(('8.8.8.8', 80))
+                ip = s.getsockname()[0]
+            finally:
+                s.close()
+        except OSError:
+            pass
+
+        port = self.env['ir.config_parameter'].sudo().get_param('http_port') or '8069'
+        return f'http://{ip}:{port}'
+
+    def _get_group_partners(self, group_xmlid):
+        """Resolve a security group to its member partners, excluding Factory
+        Admin/CEO (group_factory_admin covers both, since CEO implies it) and
+        Operations users."""
+        target_group = self.env.ref(group_xmlid, raise_if_not_found=False)
+        if not target_group:
+            return self.env['res.partner']
+
+        excluded_groups = self.env['res.groups']
+        for xmlid in ('fk_kalsal_security.group_factory_admin', 'fk_kalsal_security.group_operations'):
+            grp = self.env.ref(xmlid, raise_if_not_found=False)
+            if grp:
+                excluded_groups |= grp
+
+        users = self.env['res.users'].search([('all_group_ids', 'in', [target_group.id])])
+        if excluded_groups:
+            users = users.filtered(lambda u: not (u.all_group_ids & excluded_groups))
+        return users.mapped('partner_id')
+
+    def _notify_store_users_internal_transfer_generated(self):
+        self.ensure_one()
+        if not self.picking_id:
+            return
+
+        target_partners = self._get_group_partners('fk_kalsal_security.group_executor_stores')
+        if not target_partners:
+            return
+
+        base_url = self._get_current_base_url()
+        url = f"{base_url}/web#id={self.picking_id.id}&model=stock.picking&view_type=form"
+
+        title = _("Internal Transfer Generated")
+        plain_msg = _(
+            "MRS %s has been confirmed. Kindly process the internal transfer to Production."
+        ) % self.name
+        html_msg = Markup(_(
+            "MRS <b>%s</b> has been confirmed and an internal transfer to WH/Production has been generated.<br/><br/>"
+            "<a href='%s' target='_blank'><b>Click here to open the Internal Transfer</b></a>."
+        )) % (self.name, url)
+
+        notify_ctx = dict(self.env.context, mail_notify_force_send=False)
+        if hasattr(self, 'message_notify'):
+            self.with_context(notify_ctx).message_notify(
+                partner_ids=target_partners.ids, body=html_msg, subject=title
+            )
+        else:
+            self.env['mail.thread'].with_context(notify_ctx).message_notify(
+                model='material.requisition.slip', res_id=self.id,
+                partner_ids=target_partners.ids, body=html_msg, subject=title
+            )
+        for partner in target_partners:
+            self.env['bus.bus']._sendone(
+                partner, 'simple_notification',
+                {'type': 'warning', 'title': title, 'message': plain_msg, 'sticky': True}
+            )
 
     @api.depends()
     def _compute_allowed_sale_order_ids(self):
@@ -135,13 +237,12 @@ class MaterialRequisitionSlip(models.Model):
                 rec.produced_qty = 0.0
                 rec.remaining_qty = rec.kgs
                 continue
-            siblings = self.env['material.requisition.slip'].search([
+            siblings = self.env['mixing.slip'].search([
                 ('sale_order_id', '=', rec.sale_order_id.id),
                 ('recipe_product_id', '=', rec.recipe_product_id.id),
-                ('state', 'in', ('confirmed', 'done')),
-                ('id', '!=', rec.id or 0),
+                ('state', 'in', ( 'done')),
             ])
-            rec.produced_qty = sum(siblings.mapped('qty_producing'))
+            rec.produced_qty = sum(siblings.mapped('total_bags'))
             rec.remaining_qty = max(rec.kgs - rec.produced_qty - rec.qty_producing, 0.0)
 
     # ---------- Compute Allowed Products ----------
@@ -219,7 +320,6 @@ class MaterialRequisitionSlip(models.Model):
             self.mrp_production_id = False
             self.recipe_line_ids = [(5, 0, 0)]
 
-    # ---------- Onchange: Recipe product -> UOM, Qty, BOM lines, MO link ----------
     @api.onchange('recipe_product_id')
     def _onchange_recipe_product_id(self):
         if not self.recipe_product_id:
@@ -237,7 +337,6 @@ class MaterialRequisitionSlip(models.Model):
         line = so_line[0]
         self.uom_id = line.product_id.uom_id
 
-        # in _onchange_recipe_product_id
         other_mrs = self.env['material.requisition.slip'].search([
             ('sale_order_id', '=', self.sale_order_id.id),
             ('recipe_product_id', '=', self.recipe_product_id.id),
@@ -245,13 +344,10 @@ class MaterialRequisitionSlip(models.Model):
         ])
         already_producing = sum(other_mrs.mapped('qty_producing'))
 
-        # kgs is now a SNAPSHOT of what's left to produce at the moment this
-        # MRS is created — not the fixed original order total. It only equals
-        # the full order qty when this is the FIRST MRS for this product.
         self.kgs = max(line.product_uom_qty - already_producing, 0.0)
 
-        # Default this batch to producing everything that's currently left;
-        # the user reduces it manually to split into smaller pieces.
+        # 🔥 CRITICAL FIX 2: Apply context flag BEFORE changing qty_producing
+        self = self.with_context(skip_batch_qty_onchange=True)
         self.qty_producing = self.kgs
 
         # Safe BOM search compatible with Odoo 19
@@ -278,7 +374,6 @@ class MaterialRequisitionSlip(models.Model):
 
         self.bom_id = bom
 
-        # Resolve and STORE the MO link once, instead of re-guessing it later.
         self.mrp_production_id = self.env['mrp.production'].search([
             ('product_id', '=', self.recipe_product_id.id),
             ('bom_id', '=', bom.id),
@@ -290,55 +385,13 @@ class MaterialRequisitionSlip(models.Model):
 
     @api.onchange('qty_producing', 'kgs')
     def _onchange_batch_qty(self):
+        # 🔥 CRITICAL FIX 3: Skip execution if triggered recursively
+        if self.env.context.get('skip_batch_qty_onchange'):
+            return
+
         if self.bom_id:
             self._populate_recipe_lines()
 
-    def _populate_recipe_lines(self):
-        self.ensure_one()
-        lines = [(5, 0, 0)]
-        if not self.bom_id:
-            self.recipe_line_ids = lines
-            for line in self.recipe_line_ids:
-                _logger.warning(
-                    "MRS LINE AFTER ASSIGN | Product=%s | "
-                    "quantity_required=%s | quantity_required_total=%s",
-                    line.product_id.display_name,
-                    line.quantity_required,
-                    line.quantity_required_total,
-                )
-            return
-
-        bom = self.bom_id
-
-        def _to_bom_uom(qty):
-            try:
-                return self.uom_id._compute_quantity(
-                    qty or 0.0, bom.product_uom_id) if self.uom_id else (qty or 0.0)
-            except Exception:
-                return qty or 0.0
-
-        producing_factor = (
-            _to_bom_uom(self.qty_producing) / bom.product_qty
-        ) if bom.product_qty else 0.0
-        total_factor = (
-            _to_bom_uom(self.kgs) / bom.product_qty
-        ) if bom.product_qty else 0.0
-
-        sno = 1
-        for bl in bom.bom_line_ids:
-            lines.append((0, 0, {
-                'sno': sno,
-                'product_id': bl.product_id.id,
-                'item_code': bl.product_id.default_code or '',
-                'item_description': bl.product_id.name or '',
-                'uom_id': bl.product_uom_id.id,
-                'quantity_required': bl.product_qty * producing_factor,      # this batch
-                'quantity_required_total': bl.product_qty * total_factor,    # whole order
-                'quantity_issued': 0.0,
-                'remarks': '',
-            }))
-            sno += 1
-        self.recipe_line_ids = lines
 
     @api.constrains('qty_producing')
     def _check_qty_producing_positive(self):
@@ -505,6 +558,7 @@ class MaterialRequisitionSlip(models.Model):
                         })
 
                 rec.picking_id = picking.id
+                rec._notify_store_users_internal_transfer_generated()
             else:
                 # NEW: don't silently confirm with nothing transferred
                 raise UserError(_(
@@ -555,14 +609,14 @@ class MaterialRequisitionLine(models.Model):
     quantity_required = fields.Float(
         string='Required',
         default=0.0,
-        digits=(16, 2),
-    )
+        digits=(16,4))
     quantity_required_total = fields.Float(
         string='Total Required',
         default=0.0,
-        digits=(16, 2),
-    )
-    quantity_issued = fields.Float(string='Issued', default=0.0)
+        digits=(16,4))
+
+    quantity_issued = fields.Float(string='Issued', default=0.0, digits=(16, 4))
+
     remarks = fields.Char(string='Remarks')
 
     to_consume_display = fields.Char(
@@ -571,7 +625,8 @@ class MaterialRequisitionLine(models.Model):
     @api.depends('quantity_required', 'quantity_required_total')
     def _compute_to_consume_display(self):
         for line in self:
-            line.to_consume_display = "%.2f / %.2f" % (
+            # Using %g removes trailing zeros but keeps all necessary digits up to your precision
+            line.to_consume_display = "%g / %g" % (
                 line.quantity_required, line.quantity_required_total)
 
 class SaleOrder(models.Model):

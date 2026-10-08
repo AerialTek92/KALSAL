@@ -52,16 +52,16 @@
                             <label for="qty_producing" string="Quantity"/>
                             <div class="o_row g-0 d-flex" name="qty">
                                 <field name="qty_producing" class="text-start text-truncate"
-                                       readonly="state in ('done', 'cancel')" force_save="1"/>
+                                       readonly="state in ('done', 'cancel','confirmed')" force_save="1"/>
                                 <span class="mx-1">/</span>
                                 <field name="kgs" class="text-start text-truncate"
-                                       readonly="state != 'draft'" force_save="1"/>
+                                       readonly="state != 'draft'" force_save="1" />
                                 <field name="uom_id"
                                        options="{'no_open': True, 'no_create': True}"
                                        readonly="state != 'draft'"
                                        class="flex-grow-0" style="width:auto!important"/>
                             </div>
-
+                            <field name="qty_producing_with_wastage" readonly="1"/>
 
                             <field name="bom_id" force_save="1"/>
                             <field name="date" readonly="state != 'draft'"/>
@@ -74,6 +74,12 @@
                             <field name="company_id" invisible="1"/>
                         </group>
                     </group>
+                    <div class="alert alert-warning mb-2" role="alert">
+                        <strong>Note:</strong>
+                        Finished Good Product Quantity show on the Material Requisition slip along with it's components
+                        are shown with a 2% Increment to take note of the wastage that will happen during Production
+                        Process.
+                    </div>
                     <notebook>
                         <page string="Recipe Lines">
                             <field name="recipe_line_ids" readonly="state != 'draft'">
@@ -81,7 +87,7 @@
                                     <field name="sno" readonly="1" force_save="1"/>
                                     <field name="item_code"/>
                                     <field name="product_id" force_save="1"/>
-<!--                                    <field name="item_description" />-->
+                                    <!--                                    <field name="item_description" />-->
                                     <field name="uom_id"/>
                                     <field name="quantity_required" column_invisible="1"/>
                                     <field name="quantity_required_total" column_invisible="1"/>

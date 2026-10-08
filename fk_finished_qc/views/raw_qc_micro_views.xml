@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- 1. Add Microbiological checkbox to Raw Material QC Parameters tab -->
+    <record id="view_product_template_form_raw_micro_checkbox" model="ir.ui.view">
+        <field name="name">product.template.form.raw.micro.checkbox</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="am_kalsal_quality.product_template_form_quality_parameters"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='quality_param_line_ids']//field[@name='condition']" position="after">
+                <field name="is_microbiological"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 3. Detection column inside the STANDARD 1st/2nd QC lists
+     (non-micro detection parameters live here, not in the Micro tab) -->
+    <record id="view_kalsal_quality_check_form_detection_columns" model="ir.ui.view">
+        <field name="name">kalsal.quality.check.form.detection.columns</field>
+        <field name="model">kalsal.quality.check</field>
+        <field name="inherit_id" ref="am_kalsal_quality.view_kalsal_quality_check_form"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+
+            <!-- Flag must be present in the form so lists can reference parent -->
+            <xpath expr="//notebook" position="before">
+                <field name="has_detection_lines" invisible="1"/>
+            </xpath>
+
+            <!-- 1st QC standard list -->
+            <xpath expr="//field[@name='first_qc_line_ids']//field[@name='result']"
+                   position="attributes">
+                <attribute name="invisible">condition == 'detection'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='first_qc_line_ids']//field[@name='result']"
+                   position="after">
+                <field name="detection_result"
+                       string="Detection (Mandatory)"
+                       invisible="condition != 'detection'"
+                       column_invisible="not parent.has_detection_lines"
+                       force_save="1"
+                       decoration-success="detection_result == 'satisfactory'"
+                       decoration-danger="detection_result == 'non_satisfactory'"/>
+            </xpath>
+
+            <!-- 2nd QC standard list -->
+            <xpath expr="//field[@name='second_qc_line_ids']//field[@name='result']"
+                   position="attributes">
+                <attribute name="invisible">condition == 'detection'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='second_qc_line_ids']//field[@name='result']"
+                   position="after">
+                <field name="detection_result"
+                       string="Detection (Mandatory)"
+                       invisible="condition != 'detection'"
+                       column_invisible="not parent.has_detection_lines"
+                       readonly="parent.state == 'waiting_delay'"
+                       force_save="1"
+                       decoration-success="detection_result == 'satisfactory'"
+                       decoration-danger="detection_result == 'non_satisfactory'"/>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- 2. Add Microbiological Tests tab to QC form -->
+    <record id="view_kalsal_quality_check_form_micro_tab" model="ir.ui.view">
+        <field name="name">kalsal.quality.check.form.micro.tab</field>
+        <field name="model">kalsal.quality.check</field>
+        <field name="inherit_id" ref="am_kalsal_quality.view_kalsal_quality_check_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="before">
+                <field name="show_micro_tab" invisible="1"/>
+            </xpath>
+            <xpath expr="//notebook/page[@name='quantity_inspection']" position="before">
+                <page string="Microbiological Tests" invisible="not show_micro_tab">
+                    <!-- 1st Phase Micro List -->
+                    <field name="first_qc_micro_line_ids"
+                           invisible="state != '1st_in_progress' or not has_1st_phase_micro">
+                        <list editable="bottom" create="0">
+                            <field name="sequence" widget="handle"/>
+                            <field name="test_parameter" readonly="1"/>
+                            <field name="delay_required" widget="boolean_toggle" readonly="1"/>
+                            <field name="condition" readonly="1"/>
+                            <field name="specification" readonly="1"/>
+                            <field name="result"
+                                   invisible="condition == 'detection'"/>
+                            <field name="detection_result"
+                                   string="Detection (Mandatory)"
+                                   invisible="condition != 'detection'"
+                                   force_save="1"
+                                   decoration-success="detection_result == 'satisfactory'"
+                                   decoration-danger="detection_result == 'non_satisfactory'"/>
+                            <field name="status"
+                                   decoration-success="status == 'pass'"
+                                   decoration-danger="status == 'fail'"
+                                   decoration-warning="status == 'pending'"
+                                   decoration-info="status == 'na'"
+                                   readonly="1"/>
+                            <field name="remarks"/>
+                            <field name="status_color" column_invisible="1"/>
+                        </list>
+                    </field>
+
+                    <!-- 2nd Phase Micro List -->
+                    <field name="second_qc_micro_line_ids"
+                           invisible="state not in ('waiting_delay', '2nd_in_progress') or not has_2nd_phase_micro">
+                        <list editable="bottom" create="0">
+                            <field name="sequence" widget="handle"/>
+                            <field name="test_parameter" readonly="1"/>
+                            <field name="delay_required" widget="boolean_toggle" readonly="1"/>
+                            <field name="condition" readonly="1"/>
+                            <field name="specification" readonly="1"/>
+                            <field name="result"
+                                   invisible="condition == 'detection'"
+                                   readonly="parent.state == 'waiting_delay'"/>
+                            <field name="detection_result"
+                                   string="Detection (Mandatory)"
+                                   invisible="condition != 'detection'"
+                                   readonly="parent.state == 'waiting_delay'"
+                                   force_save="1"
+                                   decoration-success="detection_result == 'satisfactory'"
+                                   decoration-danger="detection_result == 'non_satisfactory'"/>
+                            <field name="status"
+                                   decoration-success="status == 'pass'"
+                                   decoration-danger="status == 'fail'"
+                                   decoration-warning="status == 'pending'"
+                                   decoration-info="status == 'na'"
+                                   readonly="parent.state == 'waiting_delay'"/>
+                            <field name="remarks" readonly="parent.state == 'waiting_delay'"/>
+                            <field name="status_color" column_invisible="1"/>
+                        </list>
+                    </field>
+
+                    <!-- All Micro List (draft/pass/fail/cancel) -->
+                    <field name="check_line_ids"
+                           domain="[('is_microbiological', '=', True)]"
+                           invisible="state not in ('draft', 'pass', 'fail', 'cancel')">
+                        <list editable="bottom" create="0">
+                            <field name="sequence" widget="handle"/>
+                            <field name="test_parameter" readonly="1"/>
+                            <field name="delay_required" widget="boolean_toggle" readonly="1"/>
+                            <field name="condition" readonly="1"/>
+                            <field name="specification" readonly="1"/>
+                            <field name="result"
+                                   invisible="condition == 'detection'"
+                                   readonly="1"/>
+                            <field name="detection_result"
+                                   string="Detection"
+                                   invisible="condition != 'detection'"
+                                   readonly="1"
+                                   force_save="1"
+                                   decoration-success="detection_result == 'satisfactory'"
+                                   decoration-danger="detection_result == 'non_satisfactory'"/>
+                            <field name="status"
+                                   decoration-success="status == 'pass'"
+                                   decoration-danger="status == 'fail'"
+                                   decoration-warning="status == 'pending'"
+                                   decoration-info="status == 'na'"
+                                   readonly="1"/>
+                            <field name="remarks" readonly="1"/>
+                            <field name="status_color" column_invisible="1"/>
+                        </list>
+                    </field>
+
+                    <div class="alert alert-info mt-2" role="alert">
+                        <strong>Important:</strong>
+                        For detection tests, you MUST select <strong>Satisfactory</strong> or <strong>
+                        Non-Satisfactory</strong>.
+                        Selecting <strong>Non-Satisfactory</strong> marks the line as Fail — remarks are then mandatory
+                        to pass the QC.
+                    </div>
+
+
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

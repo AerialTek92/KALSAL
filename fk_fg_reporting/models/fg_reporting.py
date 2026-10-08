@@ -1,5 +1,6 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
+from markupsafe import Markup
 
 
 class FgReporting(models.Model):
@@ -40,76 +41,243 @@ class FgReporting(models.Model):
 
     line_ids = fields.One2many('fg.reporting.line', 'reporting_id', string='Finished Goods Lines')
 
+    def _get_current_base_url(self):
+        """URL of the server actually handling this request, falling back to
+        detecting the machine's live network IP when there's no HTTP request
+        context (e.g. a cron job)."""
+        try:
+            from odoo.http import request
+            if request:
+                return request.httprequest.host_url.rstrip('/')
+        except RuntimeError:
+            pass
+
+        import socket
+        ip = '127.0.0.1'
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(('8.8.8.8', 80))
+                ip = s.getsockname()[0]
+            finally:
+                s.close()
+        except OSError:
+            pass
+
+        port = self.env['ir.config_parameter'].sudo().get_param('http_port') or '8069'
+        return f'http://{ip}:{port}'
+
+    def _get_group_partners(self, group_xmlid):
+        """Resolve a security group to its member partners, excluding Factory
+        Admin/CEO (group_factory_admin covers both, since CEO implies it) and
+        Operations users."""
+        target_group = self.env.ref(group_xmlid, raise_if_not_found=False)
+        if not target_group:
+            return self.env['res.partner']
+
+        excluded_groups = self.env['res.groups']
+        for xmlid in ('fk_kalsal_security.group_factory_admin', 'fk_kalsal_security.group_operations'):
+            grp = self.env.ref(xmlid, raise_if_not_found=False)
+            if grp:
+                excluded_groups |= grp
+
+        users = self.env['res.users'].search([('all_group_ids', 'in', [target_group.id])])
+        if excluded_groups:
+            users = users.filtered(lambda u: not (u.all_group_ids & excluded_groups))
+        return users.mapped('partner_id')
+
+    def _notify_quality_users_transfer_validated(self):
+        self.ensure_one()
+        target_partners = self._get_group_partners('fk_kalsal_security.group_management_quality')
+        if not target_partners:
+            return
+
+        base_url = self._get_current_base_url()
+        batch_names = ', '.join(self.line_ids.mapped('lot_id.name')) or _('N/A')
+
+        action_vals = {
+            'name': _('New FG Quality Check - %s') % self.name,
+            'res_model': 'finished.qc',
+            'view_mode': 'form',
+            'target': 'current',
+        }
+        if self.sale_order_id:
+            action_vals['context'] = "{'default_sale_order_id': %d}" % self.sale_order_id.id
+        action = self.env['ir.actions.act_window'].sudo().create(action_vals)
+        finished_qc_url = f"{base_url}/web#action={action.id}"
+
+        title = _("Final QC Required")
+        plain_msg = _(
+            "Internal transfer for FG Report %s has been validated. Kindly complete the Final QC for batch %s."
+        ) % (self.name, batch_names)
+        html_msg = Markup(_(
+            "The internal transfer for FG Report <b>%s</b> (Sale Order <b>%s</b>, batch <b>%s</b>) has been validated.<br/><br/>"
+            "Kindly complete the Final QC for this batch. "
+            "<a href='%s' target='_blank'><b>Click here to create a new FG Quality Check</b></a>."
+        )) % (self.name, self.sale_order_id.name, batch_names, finished_qc_url)
+
+        notify_ctx = dict(self.env.context, mail_notify_force_send=False)
+        if hasattr(self, 'message_notify'):
+            self.with_context(notify_ctx).message_notify(
+                partner_ids=target_partners.ids, body=html_msg, subject=title
+            )
+        else:
+            self.env['mail.thread'].with_context(notify_ctx).message_notify(
+                model='fg.reporting', res_id=self.id,
+                partner_ids=target_partners.ids, body=html_msg, subject=title
+            )
+        for partner in target_partners:
+            self.env['bus.bus']._sendone(
+                partner, 'simple_notification',
+                {'type': 'success', 'title': title, 'message': plain_msg, 'sticky': True}
+            )
+
+    def _notify_store_users_fg_reporting_confirmed(self):
+        self.ensure_one()
+        if not self.picking_id:
+            return
+
+        target_partners = self._get_group_partners('fk_kalsal_security.group_executor_stores')
+        if not target_partners:
+            return
+
+        base_url = self._get_current_base_url()
+        url = f"{base_url}/web#id={self.picking_id.id}&model=stock.picking&view_type=form"
+
+        title = _("FG Reporting Confirmed - Transfer Ready")
+        plain_msg = _(
+            "FG Report %s has been confirmed. Kindly validate the linked internal transfer to receive the batch."
+        ) % self.name
+        html_msg = Markup(_(
+            "FG Report <b>%s</b> has been confirmed.<br/><br/>"
+            "Kindly validate the linked internal transfer to mark receiving for the batch. "
+            "<a href='%s' target='_blank'><b>Click here to open the Internal Transfer</b></a>."
+        )) % (self.name, url)
+
+        notify_ctx = dict(self.env.context, mail_notify_force_send=False)
+        if hasattr(self, 'message_notify'):
+            self.with_context(notify_ctx).message_notify(
+                partner_ids=target_partners.ids, body=html_msg, subject=title
+            )
+        else:
+            self.env['mail.thread'].with_context(notify_ctx).message_notify(
+                model='fg.reporting', res_id=self.id,
+                partner_ids=target_partners.ids, body=html_msg, subject=title
+            )
+        for partner in target_partners:
+            self.env['bus.bus']._sendone(
+                partner, 'simple_notification',
+                {'type': 'warning', 'title': title, 'message': plain_msg, 'sticky': True}
+            )
+
     # ==========================================
-    # GATING: SOs with AT LEAST ONE passed Semi-Finished QC
+    # GATING: SOs with remaining passed SFG QC quantity
     # ==========================================
     def _compute_allowed_sale_order_ids(self):
-        """Allow SOs that have at least one product which passed
-        Semi-Finished QC AND is not yet in a confirmed FG Report."""
+        """Allow SOs that have at least one product whose passed SFG QC quantity
+        exceeds the quantity already confirmed in FG Reports."""
+        # 1. Aggregate passed SFG QC quantities per (SO, Product)
+        passed_qcs = self.env['semi.finished.qc'].search([('state', '=', 'passed')])
+        sfg_passed_map = {}
+        for qc in passed_qcs:
+            if qc.sale_order_id and qc.product_id:
+                key = (qc.sale_order_id.id, qc.product_id.id)
+                qty = qc.qc_passed_qty or qc.qty_to_qc
+                sfg_passed_map[key] = sfg_passed_map.get(key, 0.0) + qty
+
+        # 2. Aggregate confirmed FG Reporting quantities per (SO, Product)
+        confirmed_reports = self.env['fg.reporting'].search([('state', '=', 'confirmed')])
+        fg_reported_map = {}
+        for rpt in confirmed_reports:
+            if rpt.sale_order_id:
+                for line in rpt.line_ids:
+                    key = (rpt.sale_order_id.id, line.product_id.id)
+                    # Use boxes_produced as it is the true base UoM quantity
+                    qty = line.boxes_produced or (line.cartons_produced * (line.product_id.pcs_per_carton or 1.0))
+                    fg_reported_map[key] = fg_reported_map.get(key, 0.0) + qty
+
+        # 3. Determine which SOs still have unreported passed quantities
+        allowed_sos = self.env['sale.order']
+        so_ids_to_check = set(k[0] for k in sfg_passed_map.keys())
+        for so in self.env['sale.order'].browse(list(so_ids_to_check)):
+            for so_line in so.order_line:
+                key = (so.id, so_line.product_id.id)
+                passed = sfg_passed_map.get(key, 0.0)
+                reported = fg_reported_map.get(key, 0.0)
+
+                # If passed SFG quantity is strictly greater than what's already in confirmed FG reports
+                if passed > reported:
+                    allowed_sos |= so
+                    break  # SO is allowed, no need to check other lines for this SO
+
         for rec in self:
-            # SO -> set of passed product ids
-            so_passed = {}
-            for qc in self.env['semi.finished.qc'].search([('state', '=', 'passed')]):
-                if qc.sale_order_id:
-                    so_passed.setdefault(qc.sale_order_id.id, set()).add(qc.product_id.id)
-
-            # SO -> set of already-reported product ids
-            so_reported = {}
-            for rpt in self.env['fg.reporting'].search([('state', '=', 'confirmed')]):
-                if rpt.sale_order_id:
-                    so_reported.setdefault(
-                        rpt.sale_order_id.id, set()
-                    ).update(rpt.line_ids.mapped('product_id').ids)
-
-            allowed = self.env['sale.order']
-            for so_id, passed_ids in so_passed.items():
-                if passed_ids - so_reported.get(so_id, set()):  # at least one remaining
-                    allowed |= self.env['sale.order'].browse(so_id)
-            rec.allowed_sale_order_ids = allowed
+            rec.allowed_sale_order_ids = allowed_sos
 
     # ==========================================
-    # ONCHANGE: auto-build lines ONLY for passed products
+    # ONCHANGE: auto-build lines for products with remaining quantity
     # ==========================================
     @api.onchange('sale_order_id')
     def _onchange_sale_order_id(self):
-        """One line per SO product that has a PASSED Semi-Finished QC and
-        is NOT yet included in a confirmed FG Report."""
+        """One line per SO product whose mixed MRS batches still have
+        unreported quantity. 'To be produced' targets are fetched from the
+        MRS batch quantities (a 'done' MRS = mixed batch), capped by the
+        passed Semi-Finished QC quantity and the SO line quantity."""
         self.line_ids = [(5, 0, 0)]
         if not self.sale_order_id:
             return
 
-        # 1. Products that passed Semi-Finished QC
-        passed_products = self.env['semi.finished.qc'].search([
+        # 1. MRS batch quantities (mixed batches) per product
+        done_mrs = self.env['material.requisition.slip'].search([
+            ('sale_order_id', '=', self.sale_order_id.id),
+            ('state', '=', 'done'),
+        ])
+        mrs_qty_map = {}
+        for mrs in done_mrs:
+            if mrs.recipe_product_id:
+                mrs_qty_map[mrs.recipe_product_id.id] = \
+                    mrs_qty_map.get(mrs.recipe_product_id.id, 0.0) + mrs.qty_producing
+
+        # 2. Passed SFG QC qty per product (safety cap: never report more than QC released)
+        passed_qcs = self.env['semi.finished.qc'].search([
             ('sale_order_id', '=', self.sale_order_id.id),
             ('state', '=', 'passed'),
-        ]).mapped('product_id')
+        ])
+        sfg_passed_map = {}
+        for qc in passed_qcs:
+            qty = qc.qc_passed_qty or qc.qty_to_qc
+            sfg_passed_map[qc.product_id.id] = sfg_passed_map.get(qc.product_id.id, 0.0) + qty
 
-        # 2. NEW: products already reported in a CONFIRMED FG Report for this SO
-        reported_products = self.env['fg.reporting'].search([
+        # 3. Already confirmed FG Reported qty per product
+        confirmed_reports = self.env['fg.reporting'].search([
             ('sale_order_id', '=', self.sale_order_id.id),
             ('state', '=', 'confirmed'),
-        ]).mapped('line_ids.product_id')
+        ])
+        fg_reported_map = {}
+        for rpt in confirmed_reports:
+            for line in rpt.line_ids:
+                qty = line.boxes_produced or (line.cartons_produced * (line.product_id.pcs_per_carton or 1.0))
+                fg_reported_map[line.product_id.id] = fg_reported_map.get(line.product_id.id, 0.0) + qty
 
-        # 3. Only passed products that are NOT yet reported
-        so_products = self.sale_order_id.order_line.mapped('product_id').filtered(
-            lambda p: p in passed_products and p not in reported_products)
-
+        # 4. Build lines: remaining = min(MRS mixed, SFG passed, SO qty) - already reported
         lines = []
         sno = 1
-        so_lines = self.sale_order_id.order_line
-        for product in so_products:
-            # CHANGED: cartons come from the SO line's carton_qty,
-            # boxes from the pcs quantity (no more hardcoded 144)
-            p_lines = so_lines.filtered(lambda l: l.product_id == product)
-            cartons_to_be = sum(p_lines.mapped('carton_qty'))
-            boxes_to_be = sum(p_lines.mapped('product_uom_qty'))
+        for so_line in self.sale_order_id.order_line:
+            product = so_line.product_id
+            mixed = mrs_qty_map.get(product.id, 0.0)
+            passed = sfg_passed_map.get(product.id, 0.0)
+            reported = fg_reported_map.get(product.id, 0.0)
 
+            remaining_boxes = min(mixed, passed, so_line.product_uom_qty) - reported
+            if remaining_boxes <= 0.0:
+                continue
+
+            ppc = product.pcs_per_carton or 1.0
             lines.append((0, 0, {
                 'sno': sno,
                 'product_id': product.id,
                 'lot_id': self._fetch_lot_for_product(product).id or False,
-                'cartons_to_be_produced': cartons_to_be,
-                'boxes_to_be_produced': boxes_to_be,
+                'boxes_to_be_produced': remaining_boxes,
+                'cartons_to_be_produced': remaining_boxes / ppc,
             }))
             sno += 1
 
@@ -119,8 +287,8 @@ class FgReporting(models.Model):
             return {'warning': {
                 'title': _('No Eligible Products'),
                 'message': _(
-                    'Sale Order %s has no remaining products to report '
-                    '(every passed product already has a confirmed FG Report).'
+                    'Sale Order %s has no remaining mixed quantity to report '
+                    '(all done MRS batches have already been confirmed in FG Reports).'
                 ) % self.sale_order_id.name,
             }}
 
@@ -143,15 +311,11 @@ class FgReporting(models.Model):
             ], order='id desc', limit=1)
         return lot
 
-    # ==========================================
-    # ACTIONS & VALIDATION
-    # ==========================================
     def action_confirm(self):
         for rec in self:
             if not rec.line_ids:
                 raise UserError(_("No finished goods lines found. Please select a Sale Order first."))
 
-            # VARIANCE RULE: produced != to-be-produced -> reason is mandatory
             no_reason = rec.line_ids.filtered(
                 lambda l: (l.cartons_produced != l.cartons_to_be_produced
                            or l.boxes_produced != l.boxes_to_be_produced)
@@ -162,6 +326,7 @@ class FgReporting(models.Model):
             rec.write({'state': 'confirmed'})
             rec.message_post(body=_("<b>Finished Goods Reporting Confirmed.</b>"))
             rec._create_internal_transfer()
+            rec._notify_store_users_fg_reporting_confirmed()
 
     def _build_variance_error(self, lines):
         """Builds a detailed validation error for Cartons/Boxes variance."""
@@ -210,55 +375,55 @@ class FgReporting(models.Model):
                 _("Could not determine the Production / Store locations. Please check warehouse configuration."))
         return warehouse, source, dest
 
-    def _complete_mo_for_production(self, line, production_location):
-        self.ensure_one()
-        so_name = self.sale_order_id.name
-        mo = self.env['mrp.production'].search(
-            [('origin', 'like', f'{so_name}%'), ('product_id', '=', line.product_id.id)], limit=1, order='id desc')
-        if not mo: raise UserError(_("No Manufacturing Order found for %s (SO %s).") % (line.product_id.name, so_name))
-        if mo.state == 'cancel': raise UserError(_("MO %s is CANCELLED.") % mo.name)
-        if mo.state == 'done': return mo
-
-        if mo.state == 'draft': mo.action_confirm()
-
-        finished_move = mo.move_finished_ids.filtered(lambda m: m.product_id == line.product_id)[:1]
-        if not finished_move: raise UserError(_("No finished-goods move found on MO %s.") % mo.name)
-
-        # CHANGED: register production output in PCS (cartons x pcs_per_carton)
-        pcs = line.cartons_produced * (line.product_id.pcs_per_carton or 1.0)
-        lot = mo.lot_producing_ids[:1] or line.lot_id
-        finished_move.location_dest_id = production_location.id
-        finished_move.quantity = pcs
-
-        if not finished_move.move_line_ids:
-            self.env['stock.move.line'].create({
-                'move_id': finished_move.id, 'product_id': finished_move.product_id.id,
-                'lot_id': lot.id if lot else False, 'quantity': pcs,
-                'product_uom_id': finished_move.product_uom.id, 'location_id': finished_move.location_id.id,
-                'location_dest_id': production_location.id,
-            })
-        else:
-            finished_move.move_line_ids.write({'lot_id': lot.id if lot else False, 'quantity': pcs,
-                                               'location_dest_id': production_location.id})
-
-        res = mo.button_mark_done()
-        for _attempt in range(5):
-            if not isinstance(res, dict) or not res.get('res_model'): break
-            model = res['res_model']
-            ctx = res.get('context', {})
-            wiz = self.env[model].with_context(**ctx).create({})
-            if model == 'mrp.production.backorder':
-                res = wiz.action_close_mo()
-            elif model == 'mrp.immediate.production':
-                res = wiz.process()
-            elif model == 'mrp.consumption.warning':
-                res = wiz.action_confirm()
-            else:
-                raise UserError(_("MO %s could not be completed automatically (wizard: %s).") % (mo.name, model))
-
-        if mo.state != 'done': raise UserError(_("MO %s is still '%s' after automatic completion.") % (mo.name, dict(
-            mo._fields['state'].selection).get(mo.state)))
-        return mo
+    # def _complete_mo_for_production(self, line, production_location):
+    #     self.ensure_one()
+    #     so_name = self.sale_order_id.name
+    #     mo = self.env['mrp.production'].search(
+    #         [('origin', 'like', f'{so_name}%'), ('product_id', '=', line.product_id.id)], limit=1, order='id desc')
+    #     if not mo: raise UserError(_("No Manufacturing Order found for %s (SO %s).") % (line.product_id.name, so_name))
+    #     if mo.state == 'cancel': raise UserError(_("MO %s is CANCELLED.") % mo.name)
+    #     if mo.state == 'done': return mo
+    #
+    #     if mo.state == 'draft': mo.action_confirm()
+    #
+    #     finished_move = mo.move_finished_ids.filtered(lambda m: m.product_id == line.product_id)[:1]
+    #     if not finished_move: raise UserError(_("No finished-goods move found on MO %s.") % mo.name)
+    #
+    #     # CHANGED: register production output in PCS (cartons x pcs_per_carton)
+    #     pcs = line.cartons_produced * (line.product_id.pcs_per_carton or 1.0)
+    #     lot = mo.lot_producing_ids[:1] or line.lot_id
+    #     finished_move.location_dest_id = production_location.id
+    #     finished_move.quantity = pcs
+    #
+    #     if not finished_move.move_line_ids:
+    #         self.env['stock.move.line'].create({
+    #             'move_id': finished_move.id, 'product_id': finished_move.product_id.id,
+    #             'lot_id': lot.id if lot else False, 'quantity': pcs,
+    #             'product_uom_id': finished_move.product_uom.id, 'location_id': finished_move.location_id.id,
+    #             'location_dest_id': production_location.id,
+    #         })
+    #     else:
+    #         finished_move.move_line_ids.write({'lot_id': lot.id if lot else False, 'quantity': pcs,
+    #                                            'location_dest_id': production_location.id})
+    #
+    #     res = mo.button_mark_done()
+    #     for _attempt in range(5):
+    #         if not isinstance(res, dict) or not res.get('res_model'): break
+    #         model = res['res_model']
+    #         ctx = res.get('context', {})
+    #         wiz = self.env[model].with_context(**ctx).create({})
+    #         if model == 'mrp.production.backorder':
+    #             res = wiz.action_close_mo()
+    #         elif model == 'mrp.immediate.production':
+    #             res = wiz.process()
+    #         elif model == 'mrp.consumption.warning':
+    #             res = wiz.action_confirm()
+    #         else:
+    #             raise UserError(_("MO %s could not be completed automatically (wizard: %s).") % (mo.name, model))
+    #
+    #     if mo.state != 'done': raise UserError(_("MO %s is still '%s' after automatic completion.") % (mo.name, dict(
+    #         mo._fields['state'].selection).get(mo.state)))
+    #     return mo
 
     def _create_internal_transfer(self):
         self.ensure_one()
@@ -270,7 +435,7 @@ class FgReporting(models.Model):
             return self.env['stock.picking']
 
         warehouse, source, dest = self._get_transfer_locations()
-        for line in eligible_lines: self._complete_mo_for_production(line, source)
+        # for line in eligible_lines: self._complete_mo_for_production(line, source)
 
         # CHANGED: transfer quantity in PCS (cartons x pcs_per_carton)
         move_vals = [(0, 0, {
@@ -343,14 +508,40 @@ class FgReportingLine(models.Model):
     lot_id = fields.Many2one('stock.lot', string='Lot #', readonly=True)
 
     cartons_to_be_produced = fields.Float(string='No. of Cartons to be produced')
-    cartons_produced = fields.Float(string='No. of Cartons produced')
     boxes_to_be_produced = fields.Float(string='No. of Boxes to be produced')
+
+    # EDITABLE COMPUTED FIELD: always mirrors boxes_produced / pcs_per_carton.
+    # Typing boxes updates cartons live; typing cartons runs the inverse and updates boxes.
+    cartons_produced = fields.Float(
+        string='No. of Cartons produced',
+        compute='_compute_cartons_produced',
+        inverse='_inverse_cartons_produced',
+        readonly=False,
+        store=True,
+    )
     boxes_produced = fields.Float(string='No. of Boxes produced')
+
     reason_short_excess = fields.Char(string='Reason of short / excess Quantity in FG')
+
+    @api.depends('boxes_produced', 'product_id.pcs_per_carton')
+    def _compute_cartons_produced(self):
+        for line in self:
+            pieces_per_carton = line.product_id.pcs_per_carton or 1.0
+            line.cartons_produced = line.boxes_produced / pieces_per_carton
+
+    def _inverse_cartons_produced(self):
+        for line in self:
+            pieces_per_carton = line.product_id.pcs_per_carton or 1.0
+            line.boxes_produced = line.cartons_produced * pieces_per_carton
 
     @api.onchange('cartons_to_be_produced')
     def _onchange_cartons_to_be_produced(self):
-        """CHANGED: Keep Boxes = Cartons × pcs_per_carton in sync."""
         if self.cartons_to_be_produced:
-            ppc = self.product_id.pcs_per_carton or 1.0
-            self.boxes_to_be_produced = self.cartons_to_be_produced * ppc
+            pieces_per_carton = self.product_id.pcs_per_carton or 1.0
+            self.boxes_to_be_produced = self.cartons_to_be_produced * pieces_per_carton
+
+    @api.onchange('boxes_to_be_produced')
+    def _onchange_boxes_to_be_produced(self):
+        if self.boxes_to_be_produced:
+            pieces_per_carton = self.product_id.pcs_per_carton or 1.0
+            self.cartons_to_be_produced = self.boxes_to_be_produced / pieces_per_carton

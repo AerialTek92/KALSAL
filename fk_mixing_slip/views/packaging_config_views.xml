@@ -14,11 +14,13 @@
                      invisible condition on semi_product_id can evaluate it -->
                 <field name="product_type_custom" invisible="1"/>
 
-                <field name="pcs_per_carton" string="SKU" invisible="product_type_custom != 'finished'"/>
-                <field name="semi_product_id"
-                       invisible="product_type_custom != 'finished'"
-                       options="{'no_open': True, 'no_create': True}"/>
-                <field name="recipe_category"/>
+                <field name="pcs_per_carton" string="Packs Per Carton" invisible="product_type_custom != 'finished'"/>
+
+                <!-- CHANGED: Selection -> Many2many tags, user-creatable types,
+                     visible only on Semi-Finished and Finished Goods products -->
+                <field name="recipe_category_ids"
+                       widget="many2many_tags"
+                       invisible="product_type_custom not in ('semi', 'finished')"/>
 
             </xpath>
         </field>
@@ -31,6 +33,7 @@
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='order_line']//field[@name='bom_id']" position="after">
+                <field name="allowed_semi_bom_ids" column_invisible="1"/>
                 <field name="semi_bom_id" optional="show"/>
             </xpath>
         </field>
@@ -43,10 +46,10 @@
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='order_line']/list/field[@name='product_uom_qty']" position="before">
-                <field name="carton_qty" optional="show"/>
+                <field name="carton_qty" optional="show" width="auto"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/form//field[@name='product_uom_qty']" position="before">
-                <field name="carton_qty"/>
+                <field name="carton_qty" width="auto"/>
             </xpath>
         </field>
     </record>

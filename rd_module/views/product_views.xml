@@ -79,6 +79,11 @@
                 <xpath expr="//field[@name='code']" position="after">
                     <field name="version_date" string="Version Created On" readonly="1"/>
                 </xpath>
+
+                <xpath expr="//field[@name='bom_line_ids']/list/field[@name='product_uom_id']" position="attributes">
+                    <attribute name="readonly">1</attribute>
+                </xpath>
+
             </field>
         </record>
 
@@ -125,13 +130,13 @@
                         Using column_invisible="True" tells Odoo's engine to hide the field from human eyes,
                         but forces the JavaScript layer to load its data so the domain filter works flawlessly!
                     -->
-                    <field name="product_tmpl_id" column_invisible="True"/>
+                    <field name="product_tmpl_id" column_invisible="True" width="auto"/>
 
                     <!-- Your clean, well-positioned dropdown column -->
                     <field name="bom_id"
                            string="Recipe Version"
                            domain="[('product_tmpl_id', '=', product_tmpl_id), ('state', '=', 'approved')]"
-                           options="{'no_create': True, 'no_open': True}"/>
+                           options="{'no_create': True, 'no_open': True}" width="auto"/>
                 </xpath>
             </field>
         </record>

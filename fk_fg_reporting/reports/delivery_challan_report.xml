@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="stock.action_report_delivery" model="ir.actions.report">
+    <record id="action_report_delivery_challan" model="ir.actions.report">
         <field name="name">Delivery Challan</field>
         <field name="model">stock.picking</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">fk_fg_reporting.report_delivery_challan_document</field>
         <field name="report_file">fk_fg_reporting.report_delivery_challan_document</field>
         <field name="print_report_name">'Delivery Challan - %s' % (object.name)</field>
-        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <!-- FIX: Changed from stock.model_picking to model_stock_picking -->
+        <field name="binding_model_id" ref="model_stock_picking"/>
         <field name="binding_type">report</field>
     </record>
 
@@ -47,43 +48,57 @@
                             </div>
                             <div class="col-6 text-right">
                                 <img src="/am_so_to_mrp/static/src/img/second_logo.png"
-                                     style="max-height: 35px; margin-bottom: 5px;" alt="CELAKT"/>
-                                <div style="font-weight: bold; font-size: 14px; margin-top: 5px;">
+                                     style="max-height: 50px; margin-bottom: 5px;" alt="CELAKT"/>
+                            </div>
+                        </div>
+                        <div class="row pb-4" style="vertical-align">
+                            <div class="col-6">
+                                <h4 style="font-weight: bold; margin-bottom: 5px; color: black;">Delivery Challan</h4>
+                                <div class="row">
+                                    <div class="">
+                                        <table class="custom-table">
+                                            <tr>
+                                                <th style="width: 50%; font-size: 0.80rem;">Date</th>
+                                                <th style="width: 100%; font-size: 0.80rem;">Delivery Challan #</th>
+                                            </tr>
+                                            <tr>
+                                                <td style="font-size: 0.80rem;">
+                                                    <t t-esc="(o.date_done or o.scheduled_date).strftime('%d/%m/%Y') if (o.date_done or o.scheduled_date) else ''"/>
+                                                </td>
+                                                <td style="font-size: 0.80rem;">
+                                                    <t t-esc="o.name"/>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 text-right">
+                                <div style="font-weight: bold; font-size: 15px; margin-top: 5px;">
                                     <t t-esc="o.company_id.name"/>
                                 </div>
-                                <div style="font-size: 9px; line-height: 1.2;">
-                                    <t t-esc="o.company_id.street"/>,
-                                    <t t-esc="o.company_id.city"/>
+                                <div style="font-size: 14px; line-height: 1.2;">
+                                    <t t-esc="o.company_id.street"/>
                                     <br/>
-                                    tellus@kalsalpk.com Tel: +92 21 34551950
+                                    <t t-esc="o.company_id.city"/>-
+                                    <t t-esc="o.company_id.country_id.name"/>
                                     <br/>
-                                    NTN: 9672510
+                                    <t t-esc="o.company_id.email"/>
                                     <br/>
-                                    STRN 02-02-21-06-001-37
+                                    Tel:
+                                    <t t-esc="o.company_id.phone"/>
+                                    <br/>
+                                    NTN:
+                                    <t t-esc="o.company_id.vat"/>
+                                    <br/>
+                                    STRN
+                                    <t t-esc="o.company_id.company_registry"/>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Title + Date / Challan # -->
-                        <h4 style="font-weight: bold; margin-bottom: 5px; color: black;">Delivery Challan</h4>
-                        <div class="row">
-                            <div class="col-5">
-                                <table class="custom-table">
-                                    <tr>
-                                        <th style="width: 50%; font-size: 0.80rem;">Date</th>
-                                        <th style="width: 50%; font-size: 0.80rem;">Delivery Challan #</th>
-                                    </tr>
-                                    <tr>
-                                        <td style="font-size: 0.80rem;">
-                                            <t t-esc="(o.date_done or o.scheduled_date).strftime('%d/%m/%Y') if (o.date_done or o.scheduled_date) else ''"/>
-                                        </td>
-                                        <td style="font-size: 0.80rem;">
-                                            <t t-esc="o.name"/>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </div>
-                        </div>
+
 
                         <br/>
 
@@ -192,7 +207,7 @@
                         </table>
 
                         <!-- Notes / STO / Vehicle -->
-                        <div style="font-size: 10px; margin-top: 15px; line-height: 1.6;">
+                        <div style="font-size: 15px; margin-top: 15px; line-height: 1.6;">
                             <div>
                                 <b>Note:</b>
                                 The material has been received in good condition &amp; as per approved sample and
@@ -213,12 +228,12 @@
                         <!-- Signatures -->
                         <div class="row" style="margin-top: 70px;">
                             <div class="col-6 text-center">
-                                <div style="border-top: 1px solid black; width: 70%; margin: 0 auto; padding-top: 4px; font-weight: bold;">
+                                <div style="font-size: 12px; border-top: 1px solid black; width: 70%; margin: 0 auto; padding-top: 4px; font-weight: bold;">
                                     Recipient Name &amp; Signature
                                 </div>
                             </div>
                             <div class="col-6 text-center">
-                                <div style="border-top: 1px solid black; width: 70%; margin: 0 auto; padding-top: 4px; font-weight: bold;">
+                                <div style="font-size: 12px; border-top: 1px solid black; width: 70%; margin: 0 auto; padding-top: 4px; font-weight: bold;">
                                     For KalSal
                                 </div>
                             </div>

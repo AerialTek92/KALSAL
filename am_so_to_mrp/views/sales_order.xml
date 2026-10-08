@@ -27,13 +27,13 @@
         <field name="model">mrp.production</field>
         <field name="inherit_id" ref="mrp.mrp_production_tree_view"/>
         <field name="arch" type="xml">
-<!--            <xpath expr="//field[@name='product_id']" position="after">-->
-<!--                <field name="x_shortness_summary"-->
-<!--                       string="Real-time Shortage"-->
-<!--                       decoration-danger="x_shortness_summary != '✓ All Materials Available'"-->
-<!--                       decoration-success="x_shortness_summary == '✓ All Materials Available'"-->
-<!--                       optional="show"/>-->
-<!--            </xpath>-->
+            <!--            <xpath expr="//field[@name='product_id']" position="after">-->
+            <!--                <field name="x_shortness_summary"-->
+            <!--                       string="Real-time Shortage"-->
+            <!--                       decoration-danger="x_shortness_summary != '✓ All Materials Available'"-->
+            <!--                       decoration-success="x_shortness_summary == '✓ All Materials Available'"-->
+            <!--                       optional="show"/>-->
+            <!--            </xpath>-->
 
 
             <!-- In Odoo 19/Master, we MUST use //list instead of //tree -->
@@ -52,6 +52,13 @@
     <record id="mrp.mrp_production_action" model="ir.actions.act_window">
         <field name="view_mode">list,form</field>
         <field name="context">{'list_view_primary_form': True}</field>
+    </record>
+
+    <record id="sale.product_template_action" model="ir.actions.act_window">
+        <field name="name">Products</field>
+        <field name="res_model">product.template</field>
+        <!-- Append your custom domain criteria to the default ('sale_ok', '=', True) condition -->
+        <field name="domain">[('sale_ok', '=', True), ('product_type_custom', '=', 'finished')]</field>
     </record>
 
 

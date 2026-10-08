@@ -2,38 +2,39 @@ from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
 
 
+class RecipeCategory(models.Model):
+    _name = 'recipe.category'
+    _description = 'Recipe Category'
+    _order = 'sequence, name'
+
+    name = fields.Char(string='Category Name', required=True)
+    sequence = fields.Integer(string='Sequence', default=10)
+
+    # 🛠️ FIXED: Renamed to _sql_constraints and added the explicit error message field
+    _sql_constraints = [
+        ('name_uniq', 'UNIQUE(name)', 'Category name must be unique!')
+    ]
+
+
+
+
 # ==========================================
 # PRODUCT: NEW CATEGORY TYPES + CARTON MASTER DATA
 # ==========================================
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
-    # Extends the Category Type defined in am_so_to_mrp
-
     pcs_per_carton = fields.Float(
         string='Pcs per Carton', default=1.0,
         help="Saleable pieces (boxes) inside one carton, e.g. 12 x 12 = 144.")
 
-    semi_product_id = fields.Many2one(
-        'product.product', string='Semi-Finished (Bulk) Product',
-        help="On a finished (boxed) product: the bulk product whose Kit BOM "
-             "dissolves into this product's packaging BOM. SFG QC tests the bulk.")
-    RECIPE_CATEGORIES = [
-        ('recipe_mixes', 'Recipe Mixes'),
-        ('plain_spices', 'Plain Spices'),
-        ('powdered_desserts', 'Powdered Desserts'),
-    ]
-
-    recipe_category = fields.Selection(
-        selection=RECIPE_CATEGORIES,
-        string='Recipe Category',
-        help="Recipe family this product belongs to. "
-             "Displayed read-only on the Semi-Finished QC.")
+    recipe_category_ids = fields.Many2many(
+        'recipe.category', string='Recipe Category',
+        help="Recipe families this product belongs to. Multiple allowed.")
 
     @api.onchange('product_type_custom')
     def _onchange_product_type_custom_extended(self):
         """Routes/flags for the two NEW types (finished/raw stay in am_so_to_mrp)."""
-        # Odoo 18+ renamed 'stock.location.route' to 'stock.route'
         RouteModel = 'stock.route' if 'stock.route' in self.env else 'stock.location.route'
 
         mto_route = self.env.ref('stock.route_warehouse0_mto', raise_if_not_found=False)
@@ -55,13 +56,11 @@ class ProductTemplate(models.Model):
 
         for rec in self:
             if rec.product_type_custom == 'semi':
-                # Bulk: never purchased, no routes at all (Kit BOM container only)
                 rec.purchase_ok = False
                 for route in (mto_route, buy_route):
                     if route and route.id in rec.route_ids.ids:
                         rec.route_ids = [(3, route.id)]
             elif rec.product_type_custom == 'packaging':
-                # Packaging: purchased & stocked exactly like a raw material
                 rec.purchase_ok = True
                 if mto_route and mto_route.id in rec.route_ids.ids:
                     rec.route_ids = [(3, mto_route.id)]
@@ -117,10 +116,19 @@ class SaleOrderLine(models.Model):
         help="Which approved Kit (semi-finished) recipe version this order "
              "line must explode. Defaults to the latest approved version.")
 
-    @api.depends('product_id')
+    @api.depends('product_id', 'bom_id')
     def _compute_allowed_semi_bom_ids(self):
+        """The Semi-Finished Recipe Version dropdown follows the Recipe
+        Version chosen on the line: the semi component is read from that
+        finished BOM's lines, and only approved Kit versions of THAT bulk
+        product are offered."""
         for line in self:
-            semi = line.product_id.product_tmpl_id.semi_product_id
+            bom = line.bom_id
+            if not bom:
+                line.allowed_semi_bom_ids = False
+                continue
+            semi = bom.bom_line_ids.mapped('product_id').filtered(
+                lambda p: p.product_tmpl_id.product_type_custom == 'semi')[:1]
             if not semi:
                 line.allowed_semi_bom_ids = False
                 continue
@@ -132,11 +140,12 @@ class SaleOrderLine(models.Model):
                 ('product_tmpl_id', '=', semi.product_tmpl_id.id),
             ], order=order)
 
-    @api.onchange('product_id')
+    @api.onchange('product_id', 'bom_id')
     def _onchange_product_default_semi_bom(self):
         for line in self:
-            if line.product_id:
-                line.semi_bom_id = line.allowed_semi_bom_ids[:1]
+            if line.product_id and line.bom_id:
+                if line.semi_bom_id not in line.allowed_semi_bom_ids:
+                    line.semi_bom_id = line.allowed_semi_bom_ids[:1]
 
     @api.onchange('carton_qty')
     def _onchange_carton_qty(self):
@@ -227,7 +236,7 @@ class MrpProduction(models.Model):
             if mo.state in ('done', 'cancel'):
                 continue
             if kit_map:
-                mo._compute_move_raw_ids()   # re-explode with the chosen Kit
+                mo._compute_move_raw_ids()  # re-explode with the chosen Kit
             wh = self.env['stock.warehouse'].search(
                 [('company_id', '=', mo.company_id.id)], limit=1)
             prod_loc = self.env['stock.location'].search([
@@ -241,5 +250,3 @@ class MrpProduction(models.Model):
                 lambda m: m.state not in ('done', 'cancel')
             ).write({'location_id': prod_loc.id})
         return res
-
-

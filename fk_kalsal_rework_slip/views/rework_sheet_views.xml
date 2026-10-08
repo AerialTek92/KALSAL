@@ -56,7 +56,7 @@
                         <group>
                             <field name="sale_order_id" readonly="1"/>
                             <field name="product_id" readonly="1"/>
-                            <field name="batch_no" readonly="1"/>
+                            <field name="batch_no" widget="many2many_tags" readonly="1"/>
                         </group>
                     </group>
 

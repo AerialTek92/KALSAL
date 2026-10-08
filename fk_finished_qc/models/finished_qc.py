@@ -49,6 +49,18 @@ class FinishedQC(models.Model):
         'product.product', string='Allowed Products',
         compute='_compute_allowed_recipe_product_ids')
 
+    has_detection_lines = fields.Boolean(
+        string='Has Detection Parameters',
+        compute='_compute_has_detection_lines',
+        help="True when at least one test line (standard or micro) uses a detection condition.")
+
+    @api.depends('standard_line_ids.condition', 'microbiological_line_ids.condition')
+    def _compute_has_detection_lines(self):
+        for rec in self:
+            rec.has_detection_lines = bool(
+                (rec.standard_line_ids | rec.microbiological_line_ids).filtered(
+                    lambda l: l.condition == 'detection'))
+
     batch_no = fields.Many2one(
         'stock.lot', string='Batch / Lot No', tracking=True,
         help="Auto-fetched from Manufacturing Order based on Sale Order and Product.")
@@ -110,24 +122,36 @@ class FinishedQC(models.Model):
 
     @api.depends('sale_order_id', 'product_id', 'qty_to_qc')
     def _compute_available_for_qc(self):
-        """Available for Final QC = everything Semi-Finished QC has PASSED for
-        this SO/product, minus quantities already covered by other FG QC docs."""
+        """Available for Final QC = actual produced quantity from Confirmed FG Reporting
+        for this SO/product, minus quantities already covered by other FG QC docs."""
         for rec in self:
             if not (rec.sale_order_id and rec.product_id):
                 rec.available_for_qc = 0.0
                 continue
-            sfg_qcs = self.env['semi.finished.qc'].search([
-                ('sale_order_id', '=', rec.sale_order_id.id),
+
+            # 1. Get confirmed FG Reporting lines for this SO and Product
+            fg_report_lines = self.env['fg.reporting.line'].search([
+                ('reporting_id.sale_order_id', '=', rec.sale_order_id.id),
+                ('reporting_id.state', '=', 'confirmed'),
                 ('product_id', '=', rec.product_id.id),
-                ('state', '=', 'passed'),
             ])
-            sfg_passed = sum(qc.qc_passed_qty or qc.qty_to_qc for qc in sfg_qcs)
+
+            # 2. Calculate total produced quantity in product UoM (boxes/pieces)
+            # Formula: Cartons Produced * Pcs per Carton
+            total_produced = 0.0
+            for line in fg_report_lines:
+                ppc = line.product_id.pcs_per_carton or 1.0
+                total_produced += line.cartons_produced * ppc
+
+            # 3. Subtract quantities already covered by other FG QC docs for this SO/Product
             already = sum(self.search([
                 ('sale_order_id', '=', rec.sale_order_id.id),
                 ('product_id', '=', rec.product_id.id),
                 ('id', '!=', (rec.id or 0)),
             ]).mapped('qty_to_qc'))
-            rec.available_for_qc = max(sfg_passed - already, 0.0)
+
+            # 4. Set the available quantity (never negative)
+            rec.available_for_qc = max(total_produced - already, 0.0)
 
     @api.onchange('batch_no')
     def _onchange_batch_no_default_qty(self):
@@ -141,8 +165,8 @@ class FinishedQC(models.Model):
             if rec.qty_to_qc and rec.qty_to_qc > rec.available_for_qc + 0.01:
                 raise UserError(_(
                     "Qty to QC (%s) exceeds Available for QC (%s) for %s on %s.")
-                    % (rec.qty_to_qc, rec.available_for_qc,
-                       rec.product_id.display_name, rec.sale_order_id.name))
+                                % (rec.qty_to_qc, rec.available_for_qc,
+                                   rec.product_id.display_name, rec.sale_order_id.name))
 
     # ==========================================
     # GATING: only SOs whose Semi-Finished QC PASSED
@@ -152,62 +176,82 @@ class FinishedQC(models.Model):
         compute='_compute_allowed_sale_order_ids')
 
     def _compute_allowed_sale_order_ids(self):
-        """SO is selectable only if at least one of its products still needs
-        the Final QC (passed SFG + confirmed FG Report + not Final-QC'd)."""
+        """SO is selectable only if at least one of its products has remaining
+        quantity in Confirmed FG Reports that hasn't been covered by a Final QC."""
+        # 1. Aggregate Confirmed FG Reporting quantities per (SO, Product)
+        confirmed_reports = self.env['fg.reporting'].search([('state', '=', 'confirmed')])
+        fg_reported_map = {}
+        for rpt in confirmed_reports:
+            if rpt.sale_order_id:
+                for line in rpt.line_ids:
+                    key = (rpt.sale_order_id.id, line.product_id.id)
+                    qty = line.boxes_produced or (line.cartons_produced * (line.product_id.pcs_per_carton or 1.0))
+                    fg_reported_map[key] = fg_reported_map.get(key, 0.0) + qty
+
+        # 2. Aggregate Final QC quantities per (SO, Product)
+        done_fqcs = self.search([('state', 'in', ('passed', 'failed'))])
+        fqc_done_map = {}
+        for fqc in done_fqcs:
+            if fqc.sale_order_id and fqc.product_id:
+                key = (fqc.sale_order_id.id, fqc.product_id.id)
+                fqc_done_map[key] = fqc_done_map.get(key, 0.0) + (fqc.qty_to_qc or 0.0)
+
+        # 3. Determine which SOs still have un-QC'd reported quantities
+        allowed_sos = self.env['sale.order']
+        so_ids_to_check = set(k[0] for k in fg_reported_map.keys())
+        for so in self.env['sale.order'].browse(list(so_ids_to_check)):
+            for so_line in so.order_line:
+                key = (so.id, so_line.product_id.id)
+                reported = fg_reported_map.get(key, 0.0)
+                qc_done = fqc_done_map.get(key, 0.0)
+
+                # If reported FG quantity is strictly greater than what's already Final QC'd
+                if reported > qc_done:
+                    allowed_sos |= so
+                    break  # SO is allowed, no need to check other lines
+
         for rec in self:
-            so_passed = {}
-            for qc in self.env['semi.finished.qc'].search([('state', '=', 'passed')]):
-                if qc.sale_order_id:
-                    so_passed.setdefault(qc.sale_order_id.id, set()).add(qc.product_id.id)
-
-            so_reported = {}
-            for rpt in self.env['fg.reporting'].search([('state', '=', 'confirmed')]):
-                if rpt.sale_order_id:
-                    so_reported.setdefault(
-                        rpt.sale_order_id.id, set()
-                    ).update(rpt.line_ids.mapped('product_id').ids)
-
-            so_done = {}
-            for fqc in self.search([('state', 'in', ('passed', 'failed'))]):
-                if fqc.sale_order_id:
-                    so_done.setdefault(fqc.sale_order_id.id, set()).add(fqc.product_id.id)
-
-            allowed = self.env['sale.order']
-            for so_id, passed_ids in so_passed.items():
-                remaining = (passed_ids & so_reported.get(so_id, set())) - so_done.get(so_id, set())
-                if remaining:
-                    allowed |= self.env['sale.order'].browse(so_id)
-            rec.allowed_sale_order_ids = allowed
+            rec.allowed_sale_order_ids = allowed_sos
 
     @api.depends('sale_order_id')
     def _compute_allowed_recipe_product_ids(self):
+        """Product is selectable only if it has remaining quantity in Confirmed
+        FG Reports that hasn't been covered by a Final QC for this SO."""
         for rec in self:
             if not rec.sale_order_id:
                 rec.allowed_recipe_product_ids = False
                 continue
 
-            so_products = rec.sale_order_id.order_line.mapped('product_id')
-
-            passed_products = self.env['semi.finished.qc'].search([
-                ('sale_order_id', '=', rec.sale_order_id.id),
-                ('state', '=', 'passed'),
-            ]).mapped('product_id')
-
-            reported_products = self.env['fg.reporting'].search([
+            # 1. Aggregate Confirmed FG Reporting quantities for this SO
+            confirmed_reports = self.env['fg.reporting'].search([
                 ('sale_order_id', '=', rec.sale_order_id.id),
                 ('state', '=', 'confirmed'),
-            ]).mapped('line_ids.product_id')
+            ])
+            fg_reported_map = {}
+            for rpt in confirmed_reports:
+                for line in rpt.line_ids:
+                    qty = line.boxes_produced or (line.cartons_produced * (line.product_id.pcs_per_carton or 1.0))
+                    fg_reported_map[line.product_id.id] = fg_reported_map.get(line.product_id.id, 0.0) + qty
 
-            done_products = self.search([
+            # 2. Aggregate Final QC quantities for this SO
+            done_fqcs = self.search([
                 ('sale_order_id', '=', rec.sale_order_id.id),
                 ('state', 'in', ('passed', 'failed')),
-            ]).mapped('product_id')
+            ])
+            fqc_done_map = {}
+            for fqc in done_fqcs:
+                fqc_done_map[fqc.product_id.id] = fqc_done_map.get(fqc.product_id.id, 0.0) + (fqc.qty_to_qc or 0.0)
 
-            rec.allowed_recipe_product_ids = so_products.filtered(
-                lambda p: p in passed_products
-                          and p in reported_products
-                          and p not in done_products
-            )
+            # 3. Filter SO products that have remaining quantity
+            allowed_products = self.env['product.product']
+            for so_line in rec.sale_order_id.order_line:
+                product = so_line.product_id
+                reported = fg_reported_map.get(product.id, 0.0)
+                qc_done = fqc_done_map.get(product.id, 0.0)
+                if reported > qc_done:
+                    allowed_products |= product
+
+            rec.allowed_recipe_product_ids = allowed_products
 
     @api.constrains('sale_order_id', 'product_id')
     def _check_fg_reporting_confirmed(self):
@@ -251,7 +295,7 @@ class FinishedQC(models.Model):
             ], limit=1, order='id desc')
 
             if mo and mo.lot_producing_ids:
-                batch = mo.lot_producing_ids[-1].id   # LATEST batch lot
+                batch = mo.lot_producing_ids[-1].id  # LATEST batch lot
 
         if not batch and self.product_id:
             lot = self.env['stock.lot'].search([

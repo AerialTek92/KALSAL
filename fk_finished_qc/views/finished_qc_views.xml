@@ -34,6 +34,7 @@
                             <field name="batch_no" readonly="1" force_save="1"/>
                             <field name="customer_id" readonly="1"/>
                             <field name="performed_by_id"/>
+                            <field name="has_detection_lines" invisible="1"/>
                         </group>
                         <group string="Sampling &amp; Environment">
                             <field name="sample_condition" readonly="state != 'in_progress'"/>
@@ -74,6 +75,7 @@
                                     <field name="detection_result"
                                            string="Detection"
                                            invisible="condition != 'detection'"
+                                           column_invisible="not parent.has_detection_lines"
                                            readonly="parent.state != 'in_progress'"
                                            force_save="1"
                                            decoration-success="detection_result == 'absent'"
@@ -106,6 +108,7 @@
                                     <field name="detection_result"
                                            string="Detection (Mandatory)"
                                            invisible="condition != 'detection'"
+                                           column_invisible="not parent.has_detection_lines"
                                            readonly="parent.state != 'in_progress'"
                                            force_save="1"
                                            decoration-success="detection_result == 'absent'"

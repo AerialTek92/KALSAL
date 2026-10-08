@@ -40,20 +40,23 @@
 
                             <!-- Hidden field to feed the domain -->
                             <field name="allowed_recipe_product_ids" invisible="1"/>
+                            <!-- Hidden flag: hides the Detection column when unused -->
+                            <field name="has_detection_lines" invisible="1"/>
 
 
                             <!-- Now a selectable dropdown filtered by SO -->
                             <field name="product_id"
                                    required="1"
                                    readonly="state != 'draft' or not sale_order_id"/>
-                            <field name="semi_product_id" required="1" readonly="state != 'draft' or not sale_order_id"/>
-                            <field name="product_category" required="1"/>
+                            <field name="semi_product_id" required="1"
+                                   readonly="state != 'draft' or not sale_order_id"/>
+                            <field name="product_category" widget="many2many_tags" required="1"/>
                             <!-- NEW: behaves exactly like 'Responsible' in the 1st QC -->
                             <field name="performed_by_id"/>
                         </group>
                         <group string="Sampling &amp; Environment">
                             <!-- MANUAL -->
-                            <field name="batch_no" readonly="1" force_save="1"/>
+                            <field name="batch_no" widget="many2many_tags" readonly="1" force_save="1"/>
                             <field name="allowed_color_ids" invisible="1"/> <!-- ADD THIS -->
                             <field name="sample_received_date"/>
                             <field name="test_date"/>
@@ -94,7 +97,17 @@
                                     <field name="specification" readonly="1" force_save="1"/>
 
                                     <!-- MANUAL ENTRY — locked until Start Testing -->
-                                    <field name="result" readonly="parent.state != 'in_progress'"/>
+                                    <field name="result"
+                                           invisible="condition == 'detection'"
+                                           readonly="parent.state != 'in_progress'"/>
+                                    <field name="detection_result"
+                                           string="Detection (Mandatory)"
+                                           invisible="condition != 'detection'"
+                                           column_invisible="not parent.has_detection_lines"
+                                           readonly="parent.state != 'in_progress'"
+                                           force_save="1"
+                                           decoration-success="detection_result == 'satisfactory'"
+                                           decoration-danger="detection_result == 'non_satisfactory'"/>
 
                                     <field name="status"
                                            readonly="parent.state != 'in_progress'"

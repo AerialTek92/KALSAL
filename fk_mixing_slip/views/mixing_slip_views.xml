@@ -47,7 +47,8 @@
                                    readonly="state == 'done' or not sale_order_id or (id and mrs_id)"
                                    required="sale_order_id"
                                    options="{'no_open': True}"/>
-                            <field name="total_bags" readonly="state == 'done'"/>
+                            <field name="max_total_bags" readonly="1"/>
+                            <field name="total_bags"/>
                         </group>
                     </group>
 
@@ -121,5 +122,5 @@
               name="Mixing Slips"
               parent="mrp.menu_mrp_root"
               action="action_mixing_slip"
-              sequence="30"/>
+              sequence="30" groups="fk_kalsal_security.group_executor_production"/>
 </odoo>

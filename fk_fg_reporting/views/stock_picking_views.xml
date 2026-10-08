@@ -5,7 +5,17 @@
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
-            <!-- Right-hand group, next to Source Document -->
+
+            <!-- 1. Add the Delivery Challan button in the header -->
+            <xpath expr="//header" position="inside">
+                <button name="%(fk_fg_reporting.action_report_delivery_challan)d"
+                        string="Print Delivery Challan"
+                        type="action"
+                        class="btn-primary"
+                        invisible="picking_type_code != 'outgoing' or state not in ('assigned', 'done')"/>
+            </xpath>
+
+            <!-- 2. Add Vehicle Number and STO No next to Source Document -->
             <xpath expr="//field[@name='origin']" position="after">
                 <field name="vehicle_number"
                        invisible="picking_type_code != 'outgoing'"
@@ -14,6 +24,15 @@
                        invisible="picking_type_code != 'outgoing'"
                        required="picking_type_code == 'outgoing' and state not in ('draft', 'cancel')"/>
             </xpath>
+
+            <!-- Hide the core Print (Delivery Slip) button on outgoing deliveries only -->
+            <xpath expr="//header/button[@name='%(stock.action_report_delivery)d']"
+                   position="attributes">
+                <attribute name="invisible">
+                    picking_type_code == 'outgoing' or state in ('draft', 'cancel')
+                </attribute>
+            </xpath>
+
         </field>
     </record>
 </odoo>

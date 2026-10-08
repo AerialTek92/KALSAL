@@ -57,9 +57,13 @@ class KalsalReworkSheet(models.Model):
         'product.product', string='Product Name',
         related='semi_finished_qc_id.product_id', store=True, readonly=True)
 
-    batch_no = fields.Many2one(
-        'stock.lot', string='Product Batch No',
-        related='semi_finished_qc_id.batch_no', store=True, readonly=True)
+    # NEW (Fixed)
+    batch_no = fields.Many2many(
+        'stock.lot',
+        string='Batch / Lot No',
+        related='semi_finished_qc_id.batch_no',
+        readonly=True
+    )
 
     sale_order_id = fields.Many2one(
         'sale.order', string='Sale Order',

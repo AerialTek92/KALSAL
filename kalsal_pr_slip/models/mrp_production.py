@@ -15,24 +15,46 @@ class MrpProduction(models.Model):
     # ... existing methods unchanged ...
 
     def write(self, vals):
-        if any(f in vals for f in ['move_raw_ids', 'product_qty', 'qty_producing']):
+        budget_trigger = any(f in vals for f in ['move_raw_ids', 'product_qty'])
+        lock_trigger = budget_trigger or 'qty_producing' in vals
+
+        # 1. Row-lock the products to avoid concurrent-write races
+        if lock_trigger:
             products = self.move_raw_ids.mapped('product_id')
             if products:
                 self.env.cr.execute(
                     "SELECT id FROM product_product WHERE id IN %s FOR UPDATE",
                     (tuple(products.ids),)
                 )
+
         res = super(MrpProduction, self).write(vals)
-        if any(f in vals for f in ['move_raw_ids', 'product_qty', 'qty_producing']):
+
+        # 2. Budget refresh: shortness depends on demand, not on qty_producing,
+        #    so qty_producing (the MRS sync path) no longer rebuilds the budget.
+        if budget_trigger and not self.env.context.get('skip_budget_regen'):
             self._generate_forecast_budget()
 
-        # NEW: MO -> MRS sync
+        # 3. Lot assignment / stock enforcement (moved from am_so_to_mrp)
+        if lock_trigger and not self.env.context.get('skip_stock_enforcement'):
+            for mo in self.with_context(skip_stock_enforcement=True):
+                tracked_moves = mo.move_raw_ids.filtered(
+                    lambda m: m.product_id.tracking in ('lot', 'serial')
+                              and m.state not in ('done', 'cancel')
+                )
+                untracked_moves = mo.move_raw_ids - tracked_moves
+
+                tracked_moves._clear_unbacked_consumption()
+                mo.action_assign_lots_to_mo_lines()
+                untracked_moves._cap_consumed_to_available_stock()
+
+        # 4. MO -> MRS sync
         if 'qty_producing' in vals and not self.env.context.get('skip_mrs_sync'):
             for mo in self:
                 open_mrs = mo.mrs_ids.filtered(lambda m: m.state not in ('done', 'cancel'))
                 for mrs in open_mrs:
                     if float_compare(mrs.qty_producing, vals['qty_producing'], precision_digits=2) != 0:
                         mrs.with_context(skip_mo_sync=True).write({'qty_producing': vals['qty_producing']})
+
         return res
 
 

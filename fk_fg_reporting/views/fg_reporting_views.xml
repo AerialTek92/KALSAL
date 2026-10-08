@@ -58,10 +58,10 @@
                                     <field name="lot_id" readonly="1" force_save="1"/>
 
                                     <!-- MANUAL FIELDS -->
-                                    <field name="cartons_to_be_produced"/>
-                                    <field name="cartons_produced"/>
                                     <field name="boxes_to_be_produced"/>
                                     <field name="boxes_produced"/>
+                                    <field name="cartons_to_be_produced"/>
+                                    <field name="cartons_produced"/>
                                     <field name="reason_short_excess"/>
                                 </list>
                             </field>
@@ -110,6 +110,6 @@
               name="FG Reporting"
               parent="mrp.menu_mrp_root"
               action="action_fg_reporting"
-              sequence="31"/>
+              sequence="31" groups="fk_kalsal_security.group_executor_production"/>
 
 </odoo>

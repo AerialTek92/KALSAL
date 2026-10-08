@@ -33,12 +33,12 @@ class StockPicking(models.Model):
                     'Record is on hold while Received Vehicle is being Inspected, Kindly complete the inspection and try again.')
 
             if picking.picking_type_id.code == "incoming":
-                for move_line in picking.move_ids:
-                    product = move_line.product_id
+                for move in picking.move_ids:  # rename for clarity — this is stock.move
+                    product = move.product_id
 
                     if product.tracking != "lot":
                         continue
-                    if move_line.lot_ids:
+                    if move.move_line_ids.filtered(lambda l: l.lot_id):
                         continue
 
                     prefix = product.lot_prefix or "LOT"
@@ -91,18 +91,29 @@ class StockPicking(models.Model):
                         'name': lot_name,
                         'product_id': product.id,
                         'company_id': picking.company_id.id,
-                        # 'location_id': picking.location_dest_id.id
                     })
-                    print('new_lot', new_lot)
-                    # 2. Assign the actual lot record to the move line
-                    move_line.lot_ids = [(6, 0, [new_lot.id])]
 
-                    # 3. Push this lot to any existing QC records for this product
+                    # Assign directly to the move line instead of via move.lot_ids
+                    line = move.move_line_ids[:1]
+                    if line:
+                        line.lot_id = new_lot.id
+                    else:
+                        self.env['stock.move.line'].create({
+                            'move_id': move.id,
+                            'picking_id': picking.id,
+                            'product_id': product.id,
+                            'product_uom_id': move.product_uom.id,
+                            'location_id': move.location_id.id,
+                            'location_dest_id': move.location_dest_id.id,
+                            'lot_id': new_lot.id,
+                            'quantity': move.product_uom_qty,
+                        })
+
                     qc_records = self.env['kalsal.quality.check'].search([
                         ('picking_ids', 'in', picking.id),
                         ('product_id', '=', product.id)
                     ])
                     if qc_records:
-                        qc_records.write({'lot_id': [(4, new_lot.id)]})
+                        qc_records.write({'lot_id': new_lot.id})
 
-        return super().button_validate()
+        return super(StockPicking, self).button_validate()

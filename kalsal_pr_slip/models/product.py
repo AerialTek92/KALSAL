@@ -1,6 +1,25 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
+class StockQuant(models.Model):
+    _inherit = "stock.quant"
+
+    def action_view_lot_detail(self):
+        self.ensure_one()
+        lot_form = self.env.ref("stock.view_production_lot_form")
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.lot_id.display_name,
+            "res_model": "stock.lot",
+            "res_id": self.lot_id.id,
+            "view_mode": "form",
+            "views": [(lot_form.id, "form")],
+            "target": "current",
+            "context": {
+                "location": self.location_id.id,
+            },
+        }
+
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 

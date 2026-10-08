@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- 1. Inject the 'groups' attribute into the dedicated button -->
+    <record id="view_picking_grn_button_group_restrict" model="ir.ui.view">
+        <field name="name">stock.picking.form.grn.button.group.restrict</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="am_kalsal_quality.view_picking_vehicle_button"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_print_grn']" position="attributes">
+                <attribute name="groups">fk_kalsal_security.group_executor_stores</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 2. Remove the Report from the generic Print dropdown menu -->
+    <!-- Setting binding_model_id to False unbinds it from the model's Print menu -->
+    <record id="am_kalsal_quality.action_report_grn" model="ir.actions.report">
+        <field name="binding_model_id" eval="False"/>
+    </record>
+</odoo>

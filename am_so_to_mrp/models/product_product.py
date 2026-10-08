@@ -1,4 +1,4 @@
-from odoo import api, fields, models
+from odoo import api, fields, models,_
 from odoo.exceptions import ValidationError
 
 
@@ -93,6 +93,10 @@ class ProductTemplate(models.Model):
             limit=1
         )
 
+        # 3. Fetch target UoMs
+        uom_kg = self.env.ref('uom.product_uom_kgm', raise_if_not_found=False)
+        uom_unit = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
+
         for rec in self:
 
             # ==========================================================
@@ -111,6 +115,12 @@ class ProductTemplate(models.Model):
                 if finished_cat:
                     rec.categ_id = finished_cat.id
 
+                # UoM: Semi-Finished -> kg, Finished -> Units
+                # UoM: Semi-Finished -> kg, Finished -> Units
+                if rec.product_type_custom == 'semi' and uom_kg:
+                    rec.uom_id = uom_kg.id
+                elif rec.product_type_custom == 'finished' and uom_unit:
+                    rec.uom_id = uom_unit.id
             # ==========================================================
             # RAW MATERIALS + PACKAGING MATERIALS
             # ==========================================================
@@ -118,6 +128,10 @@ class ProductTemplate(models.Model):
 
                 # Purchase ON
                 rec.purchase_ok = True
+                rec.sale_ok = False
+
+                if rec.product_type_custom == 'raw' and uom_kg:
+                    rec.uom_id = uom_kg.id
 
                 # MTO OFF
                 if mto_route and mto_route in rec.route_ids:
@@ -126,3 +140,5 @@ class ProductTemplate(models.Model):
                 # Raw Material Category
                 if raw_cat:
                     rec.categ_id = raw_cat.id
+                    rec.uom_id = uom_kg.id
+                    rec.uom_po_id = uom_kg.id

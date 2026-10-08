@@ -22,7 +22,6 @@ class TecoProduction(models.Model):
         'sale.order', string='SO Number', tracking=True,
         domain="[('id', 'in', allowed_sale_order_ids)]")
 
-
     product_id = fields.Many2one('product.product', string='Product')
 
     available_product_ids = fields.Many2many(
@@ -113,6 +112,7 @@ class TecoProduction(models.Model):
             self.production_line_ids = [(0, 0, {})]
             self.labor_line_ids = [(0, 0, {})]
 
+
 # ==========================================
 # LINE MODELS - Each contains ALL Excel fields
 # ==========================================
@@ -123,7 +123,8 @@ class TecoReelConsumption(models.Model):
 
     teco_id = fields.Many2one('teco.production', string='TECO Reference', ondelete='cascade')
     total_qty = fields.Float(string='Total Qty')
-    order_qty_required_kgs = fields.Float(string='Order qty Required (in kgs)',compute='_compute_order_qty_required_kgs', store=True)
+    order_qty_required_kgs = fields.Float(string='Order qty Required (in kgs)',
+                                          compute='_compute_order_qty_required_kgs', store=True)
     total_reel_used_kgs = fields.Float(string='Total Reel Used (in kgs)')
 
     total_pack_produced = fields.Float(
@@ -150,13 +151,13 @@ class TecoReelConsumption(models.Model):
             else:
                 rec.total_pack_produced = 0.0
 
-    @api.depends('total_reel_used_kgs','total_pack_produced')
+    @api.depends('total_reel_used_kgs', 'total_pack_produced')
     def _compute_scrap_percentage(self):
         for rec in self:
             if rec.total_pack_produced:
-                pack_prod = ((rec.total_pack_produced * 2.1) / 1000)
+                should_consume = (rec.total_pack_produced * 2.1)/1000
                 if rec.total_reel_used_kgs:
-                    rec.scrap_percentage = (pack_prod - rec.total_reel_used_kgs) / rec.total_reel_used_kgs
+                    rec.scrap_percentage = ( should_consume - rec.total_reel_used_kgs ) / rec.total_reel_used_kgs
             else:
                 rec.scrap_percentage = 0.0
 
@@ -191,7 +192,7 @@ class TecoMaterialIssuance(models.Model):
     def _compute_scrap_percentage(self):
         for rec in self:
             if rec.total_produced_qty and rec.total_produced_qty != 0:
-                rec.scrap_percentage = (rec.order_qty_required_kgs - rec.total_produced_qty) / rec.total_produced_qty
+                rec.scrap_percentage = (rec.total_produced_qty - rec.order_qty_required_kgs) / rec.order_qty_required_kgs
             else:
                 rec.scrap_percentage = 0.0
 
@@ -207,7 +208,7 @@ class TecoBoxUsage(models.Model):
     _description = 'Box Usage Line'
 
     teco_id = fields.Many2one('teco.production', string='TECO Reference', ondelete='cascade')
-    total_qty = fields.Float(string='Total Qty' )
+    total_qty = fields.Float(string='Total Qty')
     total_box_used = fields.Float(string='Total Box Used (in order)')
     total_pack_produced = fields.Float(string='Total pack produced')
 
@@ -216,17 +217,16 @@ class TecoBoxUsage(models.Model):
         compute='_compute_scrap_percentage',
         store=True,
         readonly=True,
-        digits = (16, 4)
+        digits=(16, 4)
 
     )
     reason_high_scrap = fields.Text(string='Reason of high scrap (if observed)')
-
 
     @api.depends('total_box_used', 'total_pack_produced')
     def _compute_scrap_percentage(self):
         for rec in self:
             if rec.total_box_used and rec.total_pack_produced:
-                rec.scrap_percentage = (rec.total_box_used - rec.total_pack_produced) / rec.total_box_used
+                rec.scrap_percentage = (rec.total_pack_produced - rec.total_box_used) / rec.total_box_used
             else:
                 rec.scrap_percentage = 0.0
 
@@ -242,8 +242,9 @@ class TecoGumIssuance(models.Model):
     _description = 'Gum Issuance Line'
 
     teco_id = fields.Many2one('teco.production', string='TECO Reference', ondelete='cascade')
-    ttl_boxes_req = fields.Float(string='Total BOXES Required')
-    total_gum_issued = fields.Float(string='Total gum issued', compute='_compute_order_qty_required_kgs')
+    ttl_boxes_req = fields.Float(string='Total BOXES Required', digits=(16, 4))
+    total_gum_issued = fields.Float(string='Total gum issued', compute='_compute_order_qty_required_kgs',
+                                    digits=(16, 4))
     gum_used = fields.Float(string='Total gum used')
 
     scrap_percentage = fields.Float(
@@ -251,9 +252,8 @@ class TecoGumIssuance(models.Model):
         compute='_compute_scrap_percentage',
         store=True,
         readonly=True,
-        digits=(16, 4)
+        digits=(16, 4))
 
-    )
     reason_high_scrap = fields.Text(string='Reason of high scrap (if observed)')
 
     @api.depends('ttl_boxes_req')
@@ -264,11 +264,11 @@ class TecoGumIssuance(models.Model):
             else:
                 rec.total_gum_issued = 0.0
 
-    @api.depends('total_gum_issued', 'ttl_boxes_req','gum_used')
+    @api.depends('total_gum_issued', 'ttl_boxes_req', 'gum_used')
     def _compute_scrap_percentage(self):
         for rec in self:
             if rec.ttl_boxes_req and rec.gum_used and rec.total_gum_issued:
-                rec.scrap_percentage = (rec.gum_used - rec.total_gum_issued) / rec.total_gum_issued
+                rec.scrap_percentage = (rec.total_gum_issued - rec.gum_used) / rec.total_gum_issued
             else:
                 rec.scrap_percentage = 0.0
 
@@ -292,15 +292,26 @@ class TecoProductionLine(models.Model):
         compute='_compute_global_efficiency',
         store=True,
         readonly=True,
-        digits=(16, 4)
-    )
+        digits=(16, 4))
     reason_low_prod = fields.Text(string='Reason of low production (if observed)')
 
-    @api.depends('prod_in_units', 'total_capacity')
+    no_of_days = fields.Float(string='No Of Days')
+
+    total_consumption = fields.Float(string='Total Capacity in Days', compute='_compute_total_consumption')
+
+    @api.depends('total_capacity', 'no_of_days')
+    def _compute_total_consumption(self):
+        for rec in self:
+            if rec.total_capacity or rec.no_of_days:
+                rec.total_consumption = rec.total_capacity * rec.no_of_days
+            else:
+                rec.total_consumption = 0.0
+
+    @api.depends('prod_in_units', 'total_capacity', 'total_consumption')
     def _compute_global_efficiency(self):
         for rec in self:
             if rec.total_capacity and rec.total_capacity != 0:
-                rec.global_efficiency = rec.prod_in_units / rec.total_capacity
+                rec.global_efficiency = rec.prod_in_units / rec.total_consumption
             else:
                 rec.global_efficiency = 0.0
 
@@ -343,6 +354,7 @@ class TecoLaborLine(models.Model):
     def _compute_percent_extra_wrk(self):
         for rec in self:
             if rec.approved_men_power > 0 and rec.days_used > 0:
-                rec.percent_extra_wrk = (rec.approved_men_power - (rec.used_men_power * rec.days_used)) / rec.approved_men_power
+                rec.percent_extra_wrk = (round(rec.approved_men_power, 2) - (
+                            rec.used_men_power * rec.days_used)) / rec.approved_men_power
             else:
                 rec.percent_extra_wrk = 0.0

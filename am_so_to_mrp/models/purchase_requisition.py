@@ -1,7 +1,43 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from markupsafe import Markup
+from lxml import etree  # add to imports
 
+# Skipped by the blanket-readonly pass; the duplicated field nodes in the
+# XML already carry their own group/state modifiers.
+LOCKED_VIEW_EXCEPTIONS = {'payment_term_id', 'currency_id', 'state'}
+
+
+def get_view(self, view_id=None, view_type='form', **options):
+    """While locked, grey out every field on the PO form except
+    Payment Terms and Currency (Finance's two writable fields)."""
+    res = super().get_view(view_id=view_id, view_type=view_type, **options)
+    if view_type != 'form':
+        return res
+
+    doc = etree.XML(res)
+
+    # Don't touch cells inside the embedded order_line sub-view; the
+    # readonly modifier on the order_line field itself freezes the whole widget.
+    subview_fields = set()
+    for node in doc.xpath("//field[@name='order_line']"):
+        subview_fields.update(node.xpath('.//field'))
+
+    for field in doc.iter('field'):
+        if field in subview_fields:
+            continue
+        if field.get('name') in self.LOCKED_VIEW_EXCEPTIONS:
+            continue
+        current = field.get('readonly')
+        if current is None or current.strip().lower() in ('', '0', 'false'):
+            field.set('readonly', "state == 'locked'")
+        elif current.strip().lower() in ('1', 'true'):
+            continue  # already always-readonly, leave it
+        else:
+            # preserve whatever condition was already there
+            field.set('readonly', f"({current}) or state == 'locked'")
+
+    return etree.tostring(doc, encoding='unicode')
 
 
 class PurchaseRequisition(models.Model):
@@ -37,6 +73,80 @@ class PurchaseRequisition(models.Model):
     budget_id = fields.Many2one('custom.budget', string='Generated Budget', readonly=True)
     po_count = fields.Integer(string='PO Count', compute='_compute_po_count')
 
+    def _notify_approvers_pr_waiting(self):
+        target_group = self.env.ref('am_so_to_mrp.group_budget_approver', raise_if_not_found=False)
+        if not target_group:
+            return
+        target_partners = self.env['res.users'].search(
+            [('all_group_ids', 'in', [target_group.id])]
+        ).mapped('partner_id')
+        if not target_partners:
+            return
+
+        base_url = self._get_current_base_url()
+        notify_ctx = dict(self.env.context, mail_notify_force_send=False)
+
+        for pr in self:
+            url = f"{base_url}/web#id={pr.id}&model=purchase.requisition.form&view_type=form"
+            title = _("Purchase Requisition Needs Approval")
+            plain_msg = _(
+                "Purchase Requisition %s has prices requiring your approval."
+            ) % pr.name
+            html_msg = Markup(_(
+                "Purchase Requisition <b>%s</b> has prices requiring your approval.<br/><br/>"
+                "<a href='%s' target='_blank'><b>Click here to review and approve</b></a>."
+            )) % (pr.name, url)
+
+            if hasattr(pr, 'message_notify'):
+                pr.with_context(notify_ctx).message_notify(
+                    partner_ids=target_partners.ids, body=html_msg, subject=title
+                )
+            else:
+                self.env['mail.thread'].with_context(notify_ctx).message_notify(
+                    model='purchase.requisition.form', res_id=pr.id,
+                    partner_ids=target_partners.ids, body=html_msg, subject=title
+                )
+            for partner in target_partners:
+                self.env['bus.bus']._sendone(
+                    partner, 'simple_notification',
+                    {'type': 'warning', 'title': title, 'message': plain_msg, 'sticky': True}
+                )
+
+    def _notify_procurement_users_pr_approved(self):
+        target_partners = self._get_group_partners('fk_kalsal_security.group_executor_procurement')
+        if not target_partners:
+            return
+
+        base_url = self._get_current_base_url()
+        notify_ctx = dict(self.env.context, mail_notify_force_send=False)
+
+        for pr in self:
+            url = f"{base_url}/web#id={pr.id}&model=purchase.requisition.form&view_type=form"
+            title = _("Purchase Requisition Approved")
+            plain_msg = _(
+                "Purchase Requisition %s has been approved. Kindly confirm the quotes to generate Purchase Orders."
+            ) % pr.name
+            html_msg = Markup(_(
+                "Purchase Requisition <b>%s</b> has been approved.<br/><br/>"
+                "Kindly confirm the quotes to generate the Purchase Orders. "
+                "<a href='%s' target='_blank'><b>Click here to open the Requisition</b></a>."
+            )) % (pr.name, url)
+
+            if hasattr(pr, 'message_notify'):
+                pr.with_context(notify_ctx).message_notify(
+                    partner_ids=target_partners.ids, body=html_msg, subject=title
+                )
+            else:
+                self.env['mail.thread'].with_context(notify_ctx).message_notify(
+                    model='purchase.requisition.form', res_id=pr.id,
+                    partner_ids=target_partners.ids, body=html_msg, subject=title
+                )
+            for partner in target_partners:
+                self.env['bus.bus']._sendone(
+                    partner, 'simple_notification',
+                    {'type': 'success', 'title': title, 'message': plain_msg, 'sticky': True}
+                )
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -55,6 +165,7 @@ class PurchaseRequisition(models.Model):
         self.write({'state': 'confirmed'})
         if self.quotation_line_ids:
             self.quotation_line_ids.write({'approval_on': fields.Date.today()})
+        self._notify_procurement_users_pr_approved()
         return True
 
     def _has_active_po(self, product_id):
@@ -73,7 +184,6 @@ class PurchaseRequisition(models.Model):
         """
         return True
 
-
     def _validate_confirmed_quote(self, line):
         """Raise if the line has no confirmed quote."""
         if not (line.confirmed_quote_uom_price and line.confirmed_quote_vendor_id):
@@ -83,7 +193,19 @@ class PurchaseRequisition(models.Model):
 
     def action_confirm(self):
         errors = []
+        # No errors — proceed normally
         for order in self:
+            new_state = 'waiting' if any(
+                line.checked_price_1 or line.checked_price_2 or line.checked_price_3
+                for line in order.quotation_line_ids
+            ) else 'confirmed'
+            order.write({'state': new_state})
+
+            if new_state == 'waiting':
+                order._notify_approvers_pr_waiting()
+            else:
+                order._notify_procurement_users_pr_approved()
+
             for line in order.quotation_line_ids:
                 if not (line.confirmed_quote_uom_price and line.confirmed_quote_vendor_id):
                     errors.append(
@@ -219,6 +341,94 @@ class PurchaseRequisition(models.Model):
 
         return self.action_view_purchase_orders()
 
+    def _get_current_base_url(self):
+        """URL of the server actually handling this request, falling back to
+        detecting the machine's live network IP when there's no HTTP request
+        context (e.g. a cron job)."""
+        try:
+            from odoo.http import request
+            if request:
+                return request.httprequest.host_url.rstrip('/')
+        except RuntimeError:
+            pass
+
+        import socket
+        ip = '127.0.0.1'
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(('8.8.8.8', 80))
+                ip = s.getsockname()[0]
+            finally:
+                s.close()
+        except OSError:
+            pass
+
+        port = self.env['ir.config_parameter'].sudo().get_param('http_port') or '8069'
+        return f'http://{ip}:{port}'
+
+    def _get_group_partners(self, group_xmlid):
+        """Resolve a security group to its member partners, excluding Factory
+        Admin/CEO and Operations users — they inherit Production access as
+        part of their broader role, but shouldn't be pulled into
+        department-level operational notifications."""
+        target_group = self.env.ref(group_xmlid, raise_if_not_found=False)
+        if not target_group:
+            return self.env['res.partner']
+
+        excluded_groups = self.env['res.groups']
+        for xmlid in ('fk_kalsal_security.group_factory_admin', 'fk_kalsal_security.group_operations'):
+            grp = self.env.ref(xmlid, raise_if_not_found=False)
+            if grp:
+                excluded_groups |= grp
+
+        users = self.env['res.users'].search([('all_group_ids', 'in', [target_group.id])])
+        if excluded_groups:
+            users = users.filtered(lambda u: not (u.all_group_ids & excluded_groups))
+        return users.mapped('partner_id')
+
+    def _notify_production_users_stock_ready(self, sale_order):
+        target_partners = self._get_group_partners('fk_kalsal_security.group_executor_production')
+        if not target_partners:
+            return
+
+        base_url = self._get_current_base_url()
+
+        action = self.env['ir.actions.act_window'].sudo().create({
+            'name': _('New Material Requisition Slip - %s') % sale_order.name,
+            'res_model': 'material.requisition.slip',
+            'view_mode': 'form',
+            'target': 'current',
+            'context': "{'default_sale_order_id': %d}" % sale_order.id,
+        })
+        mrs_new_url = f"{base_url}/web#action={action.id}"
+
+        title = _("Stock Ready - MRS Required")
+        plain_msg = _(
+            "Stock is ready for Sale Order %s. Kindly create the Material Requisition Slip."
+        ) % sale_order.name
+        html_msg = Markup(_(
+            "Stock is ready for Sale Order <b>%s</b>.<br/><br/>"
+            "Kindly create the Material Requisition Slip for it. "
+            "<a href='%s' target='_blank'><b>Click here to create a new Material Requisition Slip</b></a>."
+        )) % (sale_order.name, mrs_new_url)
+
+        notify_ctx = dict(self.env.context, mail_notify_force_send=False)
+        if hasattr(sale_order, 'message_notify'):
+            sale_order.with_context(notify_ctx).message_notify(
+                partner_ids=target_partners.ids, body=html_msg, subject=title
+            )
+        else:
+            self.env['mail.thread'].with_context(notify_ctx).message_notify(
+                model='sale.order', res_id=sale_order.id,
+                partner_ids=target_partners.ids, body=html_msg, subject=title
+            )
+        for partner in target_partners:
+            self.env['bus.bus']._sendone(
+                partner, 'simple_notification',
+                {'type': 'warning', 'title': title, 'message': plain_msg, 'sticky': True}
+            )
+
     def _check_stock_status(self):
         """Checks if ALL active POs linked to this PR are fully received."""
         for line in self.quotation_line_ids:
@@ -249,6 +459,7 @@ class PurchaseRequisition(models.Model):
 
             if all_done:
                 pr.order_number.stock_ready = True
+                pr._notify_production_users_stock_ready(pr.order_number)
 
     def _create_pos_from_selection(self, vendor_lines):
         for vendor_id, lines in vendor_lines.items():
@@ -298,7 +509,7 @@ class QuotationRequisitionLine(models.Model):
         'second_quotation_price', 'second_quotation_vendor_id',
         'third_quotation_price', 'third_quotation_vendor_id', 'remarks',
     ]
-    
+
     finished_good_id = fields.Many2many('product.product', string='Finished Good')
 
     requisition_id = fields.Many2one('purchase.requisition.form', string='Requisition', ondelete='cascade')
@@ -310,6 +521,21 @@ class QuotationRequisitionLine(models.Model):
     checked_price_1 = fields.Boolean(string='1st Price Checked', compute='_compute_checked_prices', store=True)
     checked_price_2 = fields.Boolean(string='2nd Price Checked', compute='_compute_checked_prices', store=True)
     checked_price_3 = fields.Boolean(string='3rd Price Checked', compute='_compute_checked_prices', store=True)
+
+    @api.depends(
+        'product_id',
+        'first_quotation_vendor_id', 'first_quotation_price',
+        'second_quotation_vendor_id', 'second_quotation_price',
+        'third_quotation_vendor_id', 'third_quotation_price'
+    )
+    def _compute_checked_prices(self):
+        for line in self:
+            line.checked_price_1 = line._is_price_higher_than_recent(line.first_quotation_vendor_id,
+                                                                     line.first_quotation_price)
+            line.checked_price_2 = line._is_price_higher_than_recent(line.second_quotation_vendor_id,
+                                                                     line.second_quotation_price)
+            line.checked_price_3 = line._is_price_higher_than_recent(line.third_quotation_vendor_id,
+                                                                     line.third_quotation_price)
 
     is_po_cancelled = fields.Boolean(string='PO Cancelled', default=False, readonly=True,
                                      help="Checked if the linked PO for this product was cancelled.")
@@ -410,11 +636,6 @@ class QuotationRequisitionLine(models.Model):
         'second_quotation_vendor_id', 'second_quotation_price',
         'third_quotation_vendor_id', 'third_quotation_price'
     )
-    def _compute_checked_prices(self):
-        for line in self:
-            line.checked_price_1 = line._is_price_higher_than_recent(line.first_quotation_vendor_id, line.first_quotation_price)
-            line.checked_price_2 = line._is_price_higher_than_recent(line.second_quotation_vendor_id, line.second_quotation_price)
-            line.checked_price_3 = line._is_price_higher_than_recent(line.third_quotation_vendor_id, line.third_quotation_price)
 
     # ======================================================================
     # Onchange Handlers
@@ -513,11 +734,35 @@ class QuotationRequisitionLine(models.Model):
     def third_quote(self):
         return self._set_confirmed_quote(self.third_quotation_price, self.third_quotation_vendor_id)
 
+
 class PurchaseOrderLine(models.Model):
     _inherit = 'purchase.order.line'
 
     qc_failed = fields.Boolean(string='QC Failed', default=False)
     remarks = fields.Text(string='Reason for Price Increase')
+
+    def _assert_unlocked(self):
+        if any(line.order_id.state == 'locked' for line in self) \
+                and not self.env.context.get('bypass_lock_check'):
+            raise UserError(_(
+                "This Purchase Order is locked pending Finance's confirmation of "
+                "Payment Terms. Lines cannot be added, modified or removed until "
+                "Finance releases it."
+            ))
+
+    def write(self, vals):
+        self._assert_unlocked()
+        return super().write(vals)
+
+    def unlink(self):
+        self._assert_unlocked()
+        return super().unlink()
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        lines = super().create(vals_list)
+        lines._assert_unlocked()
+        return lines
 
 
 class PurchaseOrder(models.Model):
@@ -525,43 +770,203 @@ class PurchaseOrder(models.Model):
 
     pr_order_id = fields.Many2one('purchase.requisition.form', string='Purchase Requisition')
     payment_term_id = fields.Many2one('account.payment.term', string='Payment Terms')
-
     sale_order_id = fields.Many2one('sale.order', string='Sale Order')
 
-    state = fields.Selection(selection_add=[
-        ('locked', 'Locked')
-    ], ondelete={'locked': 'set default'})
+    # FIX: the old selection_add key was 'finance' while the code below wrote
+    # 'locked' - that value did not exist in the selection, so calling
+    # action_custom_lock() would raise a ValueError. Key now matches usage.
+    state = fields.Selection(
+        selection_add=[('locked', 'Locked - Pending Finance')],
+        ondelete={'locked': 'set default'}
+    )
 
-    def action_custom_lock(self):
-        """Transition the record state to 'locked' to trigger global read-only rules."""
+    # The only fields Finance may touch while the order is locked.
+    FINANCE_EDITABLE_FIELDS = {'payment_term_id', 'currency_id'}
+
+    def _get_current_base_url(self):
+        """URL of the server actually handling this request, falling back to
+        detecting the machine's live network IP when there's no HTTP request
+        context (e.g. a cron job)."""
+        try:
+            from odoo.http import request
+            if request:
+                return request.httprequest.host_url.rstrip('/')
+        except RuntimeError:
+            pass
+
+        import socket
+        ip = '127.0.0.1'
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(('8.8.8.8', 80))
+                ip = s.getsockname()[0]
+            finally:
+                s.close()
+        except OSError:
+            pass
+
+        port = self.env['ir.config_parameter'].sudo().get_param('http_port') or '8069'
+        return f'http://{ip}:{port}'
+
+    def _notify_group(self, group_xmlid, title, plain_msg, html_msg):
+        target_group = self.env.ref(group_xmlid, raise_if_not_found=False)
+        if not target_group:
+            return
+
+        excluded_groups = self.env['res.groups']
+        for excl_xmlid in ('fk_kalsal_security.group_factory_admin', 'fk_kalsal_security.group_operations'):
+            grp = self.env.ref(excl_xmlid, raise_if_not_found=False)
+            if grp:
+                excluded_groups |= grp
+
+        users = self.env['res.users'].search([('all_group_ids', 'in', [target_group.id])])
+        if excluded_groups:
+            users = users.filtered(lambda u: not (u.all_group_ids & excluded_groups))
+        target_partners = users.mapped('partner_id')
+        if not target_partners:
+            return
+
+        notify_ctx = dict(self.env.context, mail_notify_force_send=False)
         for order in self:
-            if order.state == 'draft':
-                order.write({'state': 'locked'})
-                order.message_post(body="Purchase Order status manually changed to Locked.")
+            if hasattr(order, 'message_notify'):
+                order.with_context(notify_ctx).message_notify(
+                    partner_ids=target_partners.ids, body=html_msg, subject=title
+                )
+            else:
+                self.env['mail.thread'].with_context(notify_ctx).message_notify(
+                    model='purchase.order', res_id=order.id,
+                    partner_ids=target_partners.ids, body=html_msg, subject=title
+                )
+            for partner in target_partners:
+                self.env['bus.bus']._sendone(
+                    partner, 'simple_notification',
+                    {'type': 'warning', 'title': title, 'message': plain_msg, 'sticky': True}
+                )
+
+    def _notify_finance_users_po_submitted(self):
+        base_url = self._get_current_base_url()
+        for order in self:
+            url = f"{base_url}/web#id={order.id}&model=purchase.order&view_type=form"
+            title = _("Payment Terms Required")
+            plain_msg = _(
+                "Purchase Order %s has been submitted for Payment Terms confirmation."
+            ) % order.name
+            html_msg = Markup(_(
+                "Purchase Order <b>%s</b> has been submitted for Payment Terms confirmation.<br/><br/>"
+                "Kindly add the Payment Terms and release it back to Procurement. "
+                "<a href='%s' target='_blank'><b>Click here to open the Purchase Order</b></a>."
+            )) % (order.name, url)
+            order._notify_group('fk_kalsal_security.group_executor_finance', title, plain_msg, html_msg)
+
+    def _notify_procurement_users_po_released(self):
+        base_url = self._get_current_base_url()
+        for order in self:
+            url = f"{base_url}/web#id={order.id}&model=purchase.order&view_type=form"
+            title = _("Purchase Order Ready to Confirm")
+            plain_msg = _(
+                "Payment Terms have been confirmed for Purchase Order %s. Kindly confirm the order."
+            ) % order.name
+            html_msg = Markup(_(
+                "Payment Terms have been confirmed for Purchase Order <b>%s</b>.<br/><br/>"
+                "Kindly confirm the order. "
+                "<a href='%s' target='_blank'><b>Click here to open the Purchase Order</b></a>."
+            )) % (order.name, url)
+            order._notify_group('fk_kalsal_security.group_executor_procurement', title, plain_msg, html_msg)
+
+    # ------------------------------------------------------------------
+    # State transitions
+    # ------------------------------------------------------------------
+    def action_custom_lock(self):
+        """Procurement: submit the finished PO to Finance for Payment Terms review."""
+        for order in self:
+            if order.state != 'draft':
+                raise UserError(_("Only Purchase Orders in Draft can be submitted to Finance."))
+            order.with_context(bypass_lock_check=True).write({'state': 'locked'})
+            order.message_post(body=_(
+                "Purchase Order submitted to Finance for Payment Terms confirmation. "
+                "It is now locked for editing."
+            ))
+            order._notify_finance_users_po_submitted()
+
+    def action_finance_release(self):
+        """Finance: confirm Payment Terms/Currency and hand the PO back to Procurement."""
+        for order in self:
+            if order.state != 'locked':
+                raise UserError(_("This Purchase Order is not pending Finance review."))
+            if not self.env.user.has_group('account.group_account_user'):
+                raise UserError(_("Only Finance users can release this Purchase Order."))
+            if not order.payment_term_id:
+                raise UserError(_("Please set Payment Terms before releasing this order to Procurement."))
+            order.with_context(bypass_lock_check=True).write({'state': 'draft'})
+            order.message_post(body=_(
+                "Payment Terms confirmed by Finance (%s). Purchase Order released back "
+                "to Procurement to be confirmed."
+            ) % (order.payment_term_id.name,))
+            order._notify_procurement_users_po_released()
 
     def action_custom_unlock(self):
-        """Revert the lock state back into a regular active Purchase Order."""
+        """Manager-only escape hatch: force a locked PO back to Draft WITHOUT the
+        Payment Terms check that action_finance_release enforces. Restrict this
+        button in the view to a manager group."""
         for order in self:
             if order.state == 'locked':
-                order.write({'state': 'draft'})
-                order.message_post(body="Purchase Order unlocked for modifications.")
+                order.with_context(bypass_lock_check=True).write({'state': 'draft'})
+                order.message_post(body=_("Purchase Order force-unlocked (Payment Terms not verified)."))
+
+    # ------------------------------------------------------------------
+    # Server-side enforcement - this is what actually protects the data,
+    # independent of which view/screen/automation is doing the writing.
+    # ------------------------------------------------------------------
+    def write(self, vals):
+        if self.env.context.get('bypass_lock_check'):
+            return super().write(vals)
+
+        touched_fields = set(vals.keys()) - {'state', 'message_follower_ids', 'activity_ids','access_token'}
+        if touched_fields:
+            is_finance = self.env.user.has_group('account.group_account_user')
+            for order in self:
+                if order.state != 'locked':
+                    continue
+                if not is_finance:
+                    raise UserError(_(
+                        "This Purchase Order is locked pending Finance's confirmation of "
+                        "Payment Terms. No changes are allowed until Finance releases it."
+                    ))
+                extra_fields = touched_fields - self.FINANCE_EDITABLE_FIELDS
+                if extra_fields:
+                    raise UserError(_(
+                        "While this Purchase Order is locked, Finance can only update "
+                        "Payment Terms and Currency."
+                    ))
+        return super().write(vals)
+
+    def button_cancel(self):
+        res = super().button_cancel()
+        self._button_redo()
+        return res
 
     def _button_redo(self):
         for order in self:
             if not order.pr_order_id:
                 continue
 
-            # Count total lines in the PO
+            # Check if there are any active GRNs (transfers) associated with the PO
+            # We filter out 'cancel' states to ensure we are only looking for active/done receipts
+            active_grn = order.picking_ids.filtered(lambda p: p.state != 'cancel')
+
             total_lines_count = len(order.order_line)
 
-            # Filter the lines where qc_failed is True
-            failed_lines = order.order_line.filtered('qc_failed')
-            failed_lines_count = len(failed_lines)
+            if not active_grn:
+                # If no active GRN exists, treat all lines as failed lines
+                failed_lines = order.order_line
+            else:
+                # Default flow: only count lines that actually failed the QC check
+                failed_lines = order.order_line.filtered('qc_failed')
 
-            # 1. Extract unique products from failed lines
+            failed_lines_count = len(failed_lines)
             cancelled_products = failed_lines.mapped('product_id')
 
-            # 2. Find matching quote lines and clear the confirmed price and vendor
             order.pr_order_id.quotation_line_ids.filtered(
                 lambda l: l.product_id in cancelled_products
             ).write({
@@ -570,101 +975,40 @@ class PurchaseOrder(models.Model):
                 'confirmed_quote_vendor_id': False
             })
 
-            if order.pr_order_id.state == 'done':
-                order.pr_order_id.write({'state': 'redo'})
-
-            # 3. If ALL lines failed QC, cancel the Purchase Order entirely
-            if total_lines_count > 0 and total_lines_count == failed_lines_count:
+            if total_lines_count > 0 and total_lines_count == failed_lines_count and active_grn:
                 if hasattr(order, 'button_cancel'):
                     order.button_cancel()
+                    order.pr_order_id.write({'state': 'redo'})
+
                 elif hasattr(order, 'action_cancel'):
                     order.action_cancel()
+                    order.pr_order_id.write({'state': 'redo'})
+
 
     def button_confirm(self):
         if not self.payment_term_id:
             raise UserError(_('Payment Terms not defined. Notify the Finance Team to keep the flow running.'))
 
-        # 1. Record existing pickings before the confirmation process
         existing_pickings = self.picking_ids
-
-        # 2. Call the standard Odoo confirm process (creates new pickings)
         res = super().button_confirm()
 
-        # 3. Filter for newly created incoming pickings only
         incoming_new_pickings = (self.picking_ids - existing_pickings).filtered(
             lambda p: p.picking_type_id.code == 'incoming'
         )
 
         if incoming_new_pickings:
-            # Update state to Vehicle Inspection
             incoming_new_pickings.write({'state': 'vehicle_inspection'})
-
-            # ==========================================
-            # NOTIFICATION LOGIC (Inbox Panel + Popups)
-            # ==========================================
-
-            # Get target users (Assuming Quality/Inspection users need to see this)
-            target_group = self.env.ref('am_kalsal_quality.group_quality_user', raise_if_not_found=False)
-            target_partners = self.env['res.partner']
-
-            if target_group:
-                target_users = self.env['res.users'].search([('group_ids', 'in', [target_group.id])])
-                target_partners = target_users.mapped('partner_id')
-
-            if target_partners:
-                base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
-
-                # Context to prevent the yellow "Email Failure" popup
-                notify_ctx = dict(self.env.context, mail_notify_force_send=False)
-
-                for picking in incoming_new_pickings:
-                    # Generate URL directly to this specific GRN (Receipt)
-                    url = f"{base_url}/web#id={picking.id}&model=stock.picking&view_type=form"
-
-                    title = _("Vehicle Inspection Required")
-
-                    # Plain text for the Screen Popup (Toast)
-                    plain_msg = _(
-                        "Vehicle Inspection linked to GRN %s needs to be fulfilled. Kindly pass the vehicle for further product processing.") % picking.name
-
-                    # HTML text for the Inbox Panel (Clickable Link)
-                    html_msg = Markup(_(
-                        "The Vehicle Inspection Linked to GRN <b>%s</b> needs to be fulfilled.<br/><br/>"
-                        "Kindly pass the vehicle for further product processing. "
-                        "<a href='%s' target='_blank'><b>Click here to open the GRN</b></a>."
-                    )) % (picking.name, url)
-
-                    # 1. Send to Inbox (Attached directly to the GRN record)
-                    if hasattr(picking, 'message_notify'):
-                        picking.with_context(notify_ctx).message_notify(
-                            partner_ids=target_partners.ids,
-                            body=html_msg,
-                            subject=title
-                        )
-                    else:
-                        self.env['mail.thread'].with_context(notify_ctx).message_notify(
-                            model='stock.picking',
-                            res_id=picking.id,
-                            partner_ids=target_partners.ids,
-                            body=html_msg,
-                            subject=title
-                        )
-
-                    # 2. Trigger Live Toasts (Popups) for target users
-                    for partner in target_partners:
-                        self.env['bus.bus']._sendone(
-                            partner,
-                            'simple_notification',
-                            {
-                                'type': 'warning',  # 'warning' gives it an orange/yellow alert color
-                                'title': title,
-                                'message': plain_msg,
-                                'sticky': True,  # Keeps it on screen until closed
-                            }
-                        )
+            incoming_new_pickings._notify_store_users_grn_generated()
 
         return res
-    
+
+    def unlink(self):
+        if any(order.state == 'locked' for order in self):
+            raise UserError(_(
+                "A Purchase Order pending Finance review cannot be deleted."
+            ))
+        return super().unlink()
+
     def action_view_purchase_requisition(self):
         self.ensure_one()
         if not self.pr_order_id:

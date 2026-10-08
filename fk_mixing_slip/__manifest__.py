@@ -4,7 +4,7 @@
     'summary': 'Mixing / Production reconciliation slip linked to MRS',
     'author': 'Fakhir Khan',
     'license': 'LGPL-3',
-    'depends': ['kalsal_pr_slip', 'base', 'product', 'stock', 'purchase', 'mrp', 'sale',],
+    'depends': ['kalsal_pr_slip', 'base', 'product', 'stock', 'purchase', 'mrp', 'sale', 'rd_module'],
     'data': [
         'security/ir.model.access.csv',
         'data/sequence.xml',

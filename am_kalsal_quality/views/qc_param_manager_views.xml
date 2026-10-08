@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ========================================================== -->
+    <!-- APPROACH A: standalone editable parameter windows          -->
+    <!-- (Quality users edit LINES here; the product stays locked)  -->
+    <!-- ========================================================== -->
+
+    <!-- 1. Editable list: Raw Material parameters -->
+    <record id="view_raw_qc_param_line_standalone" model="ir.ui.view">
+        <field name="name">product.quality.parameter.line.standalone</field>
+        <field name="model">product.quality.parameter.line</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="product_tmpl_id" readonly="1"/>
+                <field name="parameter_id"/>
+                <field name="condition"/>
+                <field name="specification"/>
+                <field name="delay_required"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- 2. Editable list: Semi-Finished parameters -->
+    <record id="view_semi_qc_param_line_standalone" model="ir.ui.view">
+        <field name="name">semi.quality.parameter.line.standalone</field>
+        <field name="model">semi.quality.parameter.line</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="product_tmpl_id" readonly="1"/>
+                <field name="parameter_id"/>
+                <field name="condition"/>
+                <field name="specification"/>
+                <field name="delay_required"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- 3. Editable list: Packaging parameters -->
+    <record id="view_packaging_qc_param_line_standalone" model="ir.ui.view">
+        <field name="name">packaging.quality.parameter.line.standalone</field>
+        <field name="model">packaging.quality.parameter.line</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="product_tmpl_id" readonly="1"/>
+                <field name="parameter_id"/>
+                <field name="condition"/>
+                <field name="specification"/>
+                <field name="delay_required"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- 4. Editable list: Finished Goods parameters -->
+    <record id="view_finished_qc_param_line_standalone" model="ir.ui.view">
+        <field name="name">finished.quality.parameter.line.standalone</field>
+        <field name="model">finished.quality.parameter.line</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="product_tmpl_id" readonly="1"/>
+                <field name="parameter_id"/>
+                <field name="condition"/>
+                <field name="specification"/>
+                <field name="delay_required"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- 5. The gate: smart button on the product form, Quality role only -->
+    <record id="product_template_form_qc_params_button" model="ir.ui.view">
+        <field name="name">product.template.form.qc.params.button</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_manage_qc_parameters" type="object"
+                        class="oe_stat_button" icon="fa-flask"
+                        string="QC Parameters"
+                        invisible="product_type_custom not in ('raw', 'semi', 'finished', 'packaging')"
+                        groups="am_kalsal_quality.group_quality_user"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 6. ACL gap-fix (kept in XML so NOTHING else is touched):
+         packaging parameter lines currently have no user-tier access row -->
+    <record id="access_packaging_qc_param_line_user" model="ir.model.access">
+        <field name="name">packaging.quality.parameter.line.user</field>
+        <field name="model_id" ref="model_packaging_quality_parameter_line"/>
+        <field name="group_id" ref="base.group_user"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+</odoo>
