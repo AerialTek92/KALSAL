@@ -1,150 +1,148 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="purchase.action_report_purchase_order" model="ir.actions.report">
-        <field name="name">Purchase Order</field>
+    <record id="action_report_purchase_order_kalsal" model="ir.actions.report">
+        <field name="name">Purchase Order (Custom)</field>
         <field name="model">purchase.order</field>
-        <field name="report_type">qweb-pdf</field>
+        <field name="report_type">qweb-html</field>
         <field name="report_name">am_so_to_mrp.report_purchaseorder_document_kalsal</field>
         <field name="report_file">am_so_to_mrp.report_purchaseorder_document_kalsal</field>
         <field name="print_report_name">
-            (object.state in ('draft', 'sent') and 'Request for Quotation - %s' % (object.name) or
-            'Purchase Order - %s' % (object.name))
+            (object.state in ('draft', 'sent') and 'Request for Quotation - %s' % (object.name) or 'Purchase Order - %s'
+            % (object.name))
         </field>
-        <field name="binding_model_id" ref="purchase.model_purchase_order"/>
-        <field name="binding_type">report</field>
     </record>
 
-    <template id="report_purchaseorder_document_kalsal">
+        <template id="report_purchaseorder_document_kalsal">
         <t t-call="web.html_container">
             <t t-foreach="docs" t-as="o">
                 <t t-call="web.basic_layout">
 
                     <style type="text/css">
-                        /* Root Document Reset & Font Styling */
+                        /* Root Document Reset &amp; Font Styling */
                         .kpo-doc {
-                            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
-                            font-size: 12px !important;
-                            color: #000000 !important;
-                            line-height: 1.25 !important;
-                            width: 100% !important;
-                            margin: 0 !important;
-                            padding: 0 !important;
+                        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+                        font-size: 12px !important;
+                        color: #000000 !important;
+                        line-height: 1.25 !important;
+                        width: 100% !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
                         }
 
                         /* Structural Layout Containers (100% Fixed Grid) */
                         table.kpo-lay {
-                            width: 100% !important;
-                            table-layout: fixed !important;
-                            border-collapse: collapse !important;
-                            border: none !important;
-                            margin-bottom: 12px !important;
+                        width: 100% !important;
+                        table-layout: fixed !important;
+                        border-collapse: collapse !important;
+                        border: none !important;
+                        margin-bottom: 12px !important;
                         }
                         table.kpo-lay td {
-                            border: none !important;
-                            padding: 0 !important;
-                            vertical-align: top !important;
+                        border: none !important;
+                        padding: 0 !important;
+                        vertical-align: top !important;
                         }
 
                         /* Standard Boxed Content Tables */
                         table.kpo-box {
-                            width: 100% !important;
-                            table-layout: fixed !important;
-                            border-collapse: collapse !important;
-                            border: 1px solid #000000 !important;
+                        width: 100% !important;
+                        table-layout: fixed !important;
+                        border-collapse: collapse !important;
+                        border: 1px solid #000000 !important;
                         }
                         table.kpo-box th, table.kpo-box td {
-                            border: 1px solid #000000 !important;
-                            padding: 4px 6px !important;
-                            font-size: 12px !important;
-                            color: #000000 !important;
-                            vertical-align: middle !important;
+                        border: 1px solid #000000 !important;
+                        padding: 4px 6px !important;
+                        font-size: 12px !important;
+                        color: #000000 !important;
+                        vertical-align: middle !important;
                         }
                         table.kpo-box th {
-                            font-weight: bold !important;
-                            text-align: center !important;
-                            background-color: #ffffff !important;
+                        font-weight: bold !important;
+                        text-align: center !important;
+                        background-color: #ffffff !important;
                         }
 
                         /* ISO Document Control Box */
                         table.kpo-iso {
-                            width: 100% !important;
-                            table-layout: fixed !important;
-                            border-collapse: collapse !important;
-                            border: 1px solid #000000 !important;
+                        width: 100% !important;
+                        table-layout: fixed !important;
+                        border-collapse: collapse !important;
+                        border: 1px solid #000000 !important;
                         }
                         table.kpo-iso td {
-                            border: 1px solid #000000 !important;
-                            padding: 3px 6px !important;
-                            font-size: 10.5px !important;
-                            text-align: left !important;
-                            color: #000000 !important;
+                        border: 1px solid #000000 !important;
+                        padding: 3px 6px !important;
+                        font-size: 10.5px !important;
+                        text-align: left !important;
+                        color: #000000 !important;
                         }
 
                         /* Main Order Lines Table Grid */
                         table.kpo-lines {
-                            width: 100% !important;
-                            table-layout: fixed !important;
-                            border-collapse: collapse !important;
-                            border: 1px solid #000000 !important;
-                            margin-top: 4px !important;
+                        width: 100% !important;
+                        table-layout: fixed !important;
+                        border-collapse: collapse !important;
+                        border: 1px solid #000000 !important;
+                        margin-top: 4px !important;
                         }
                         table.kpo-lines thead th {
-                            border: 1px solid #000000 !important;
-                            background-color: #e0e0e0 !important;
-                            font-weight: normal !important;
-                            font-size: 12px !important;
-                            text-align: center !important;
-                            padding: 5px 4px !important;
-                            color: #000000 !important;
+                        border: 1px solid #000000 !important;
+                        background-color: #e0e0e0 !important;
+                        font-weight: normal !important;
+                        font-size: 12px !important;
+                        text-align: center !important;
+                        padding: 5px 4px !important;
+                        color: #000000 !important;
                         }
                         table.kpo-lines tbody td {
-                            border-left: 1px solid #000000 !important;
-                            border-right: 1px solid #000000 !important;
-                            border-top: none !important;
-                            border-bottom: none !important;
-                            padding: 4px 6px !important;
-                            font-size: 12px !important;
-                            color: #000000 !important;
-                            vertical-align: top !important;
+                        border-left: 1px solid #000000 !important;
+                        border-right: 1px solid #000000 !important;
+                        border-top: none !important;
+                        border-bottom: none !important;
+                        padding: 4px 6px !important;
+                        font-size: 12px !important;
+                        color: #000000 !important;
+                        vertical-align: top !important;
                         }
                         table.kpo-lines tfoot th, table.kpo-lines tfoot td {
-                            border: 1px solid #000000 !important;
-                            padding: 5px 6px !important;
-                            font-size: 13px !important;
-                            font-weight: bold !important;
-                            color: #000000 !important;
-                            background-color: #ffffff !important;
+                        border: 1px solid #000000 !important;
+                        padding: 5px 6px !important;
+                        font-size: 13px !important;
+                        font-weight: bold !important;
+                        color: #000000 !important;
+                        background-color: #ffffff !important;
                         }
 
-                        /* Alignments & Borders */
+                        /* Alignments &amp; Borders */
                         .tl { text-align: left !important; }
                         .tc { text-align: center !important; }
                         .tr { text-align: right !important; }
                         .noborder-r { border-right: none !important; }
                         .noborder-l { border-left: none !important; }
 
-                        /* Notes & Legal Disclaimer */
+                        /* Notes &amp; Legal Disclaimer */
                         .kpo-notes {
-                            font-size: 11px !important;
-                            margin-top: 14px !important;
-                            line-height: 1.35 !important;
-                            color: #000000 !important;
+                        font-size: 11px !important;
+                        margin-top: 14px !important;
+                        line-height: 1.35 !important;
+                        color: #000000 !important;
                         }
                         .kpo-notes ol {
-                            margin: 3px 0 0 0 !important;
-                            padding-left: 18px !important;
+                        margin: 3px 0 0 0 !important;
+                        padding-left: 18px !important;
                         }
                         .kpo-notes li {
-                            margin-bottom: 2px !important;
+                        margin-bottom: 2px !important;
                         }
 
                         .kpo-footer {
-                            font-size: 10px !important;
-                            font-weight: bold !important;
-                            text-align: left !important;
-                            margin-top: 35px !important;
-                            line-height: 1.3 !important;
-                            color: #000000 !important;
+                        font-size: 10px !important;
+                        font-weight: bold !important;
+                        text-align: left !important;
+                        margin-top: 35px !important;
+                        line-height: 1.3 !important;
+                        color: #000000 !important;
                         }
                     </style>
 
@@ -156,7 +154,8 @@
                                 <td style="width: 50%;">
                                     <img t-if="o.company_id.logo" t-att-src="image_data_uri(o.company_id.logo)"
                                          style="max-height: 52px;" alt="Logo"/>
-                                    <div style="font-size: 20px; font-weight: bold; margin-top: 16px;">Purchase Order</div>
+                                    <div style="font-size: 20px; font-weight: bold; margin-top: 16px;">Purchase Order
+                                    </div>
                                 </td>
                                 <td style="width: 50%; text-align: right;">
                                     <img src="/am_so_to_mrp/static/src/img/second_logo.png"
@@ -166,15 +165,17 @@
                                         <t t-out="o.company_id.name or 'KalSal Private Limited'"/>
                                     </div>
                                     <div style="font-size: 10.5px; line-height: 1.25; margin-top: 2px;">
-                                        Plot # C-20, Sector 31/A, Mehran Town Extention, Karachi<br/>
-                                        Pakistan,tellus@kalsalpk.com Tel:<br/>
+                                        Plot # C-20, Sector 31/A, Mehran Town Extention, Karachi
+                                        <br/>
+                                        Pakistan,tellus@kalsalpk.com Tel:
+                                        <br/>
                                         +92 21 34551950
                                     </div>
                                 </td>
                             </tr>
                         </table>
 
-                        <!-- ===== DATE / PO NO. & ISO CONTROL BOX ===== -->
+                        <!-- ===== DATE / PO NO. &amp; ISO CONTROL BOX ===== -->
                         <table class="kpo-lay">
                             <tr>
                                 <td style="width: 48.5%;">
@@ -184,23 +185,33 @@
                                             <th style="width: 50%;">P.O. No.</th>
                                         </tr>
                                         <tr>
-                                            <td class="tc"><t t-out="o.date_order.strftime('%d/%m/%Y') if o.date_order else ''"/></td>
-                                            <td class="tc"><t t-out="o.name"/></td>
+                                            <td class="tc">
+                                                <t t-out="o.date_order.strftime('%d/%m/%Y') if o.date_order else ''"/>
+                                            </td>
+                                            <td class="tc">
+                                                <t t-out="o.name"/>
+                                            </td>
                                         </tr>
                                     </table>
                                 </td>
                                 <td style="width: 17.5%;"></td>
                                 <td style="width: 34%;">
                                     <table class="kpo-iso">
-                                        <tr><td>KPL-FS-PR-29-FM-06</td></tr>
-                                        <tr><td>Issue Date: 01-06-2025</td></tr>
-                                        <tr><td>Rev 02</td></tr>
+                                        <tr>
+                                            <td>KPL-FS-PR-29-FM-06</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Issue Date: 01-06-2025</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Rev 02</td>
+                                        </tr>
                                     </table>
                                 </td>
                             </tr>
                         </table>
 
-                        <!-- ===== VENDOR & SHIP TO BOXES ===== -->
+                        <!-- ===== VENDOR &amp; SHIP TO BOXES ===== -->
                         <table class="kpo-lay">
                             <tr>
                                 <td style="width: 48.5%;">
@@ -209,11 +220,20 @@
                                             <th class="tl" style="padding-left: 6px;">Vendor</th>
                                         </tr>
                                         <tr>
-                                            <td class="tl" style="height: 78px; vertical-align: top; padding: 4px 6px; line-height: 1.35;">
-                                                <t t-out="o.partner_id.name"/><br/>
-                                                <t t-if="o.partner_id.street"><t t-out="o.partner_id.street"/><br/></t>
-                                                <t t-if="o.partner_id.city"><t t-out="o.partner_id.city"/><br/></t>
-                                                NTN # <t t-out="o.partner_id.vat or ''"/>
+                                            <td class="tl"
+                                                style="height: 78px; vertical-align: top; padding: 4px 6px; line-height: 1.35;">
+                                                <t t-out="o.partner_id.name"/>
+                                                <br/>
+                                                <t t-if="o.partner_id.street">
+                                                    <t t-out="o.partner_id.street"/>
+                                                    <br/>
+                                                </t>
+                                                <t t-if="o.partner_id.city">
+                                                    <t t-out="o.partner_id.city"/>
+                                                    <br/>
+                                                </t>
+                                                NTN #
+                                                <t t-out="o.partner_id.vat or ''"/>
                                             </td>
                                         </tr>
                                     </table>
@@ -225,11 +245,16 @@
                                             <th class="tl" style="padding-left: 6px;">Ship To</th>
                                         </tr>
                                         <tr>
-                                            <td class="tl" style="height: 78px; vertical-align: top; padding: 4px 6px; line-height: 1.35;">
-                                                KalSal (Private) Limited<br/>
-                                                Plot # C-20, sector 31/A, Mehran Town K.I.A<br/>
-                                                Karachi.<br/>
-                                                NTN # 9672510-3<br/>
+                                            <td class="tl"
+                                                style="height: 78px; vertical-align: top; padding: 4px 6px; line-height: 1.35;">
+                                                KalSal (Private) Limited
+                                                <br/>
+                                                Plot # C-20, sector 31/A, Mehran Town K.I.A
+                                                <br/>
+                                                Karachi.
+                                                <br/>
+                                                NTN # 9672510-3
+                                                <br/>
                                                 STRN # 02-02-21-06-001-37
                                             </td>
                                         </tr>
@@ -238,7 +263,7 @@
                             </tr>
                         </table>
 
-                        <!-- ===== TERMS & DUE DATE ===== -->
+                        <!-- ===== TERMS &amp; DUE DATE ===== -->
                         <table class="kpo-lay">
                             <tr>
                                 <td style="width: 48.5%;">
@@ -248,8 +273,12 @@
                                             <th style="width: 50%;">Due Date</th>
                                         </tr>
                                         <tr>
-                                            <td class="tc"><t t-out="o.payment_term_id.name or '30 Days'"/></td>
-                                            <td class="tc"><t t-out="o.date_planned.strftime('%d/%m/%Y') if o.date_planned else ''"/></td>
+                                            <td class="tc">
+                                                <t t-out="o.payment_term_id.name or '30 Days'"/>
+                                            </td>
+                                            <td class="tc">
+                                                <t t-out="o.date_planned.strftime('%d/%m/%Y') if o.date_planned else ''"/>
+                                            </td>
                                         </tr>
                                     </table>
                                 </td>
@@ -274,12 +303,26 @@
                             <tbody>
                                 <t t-foreach="o.order_line" t-as="line">
                                     <tr>
-                                        <td class="tl"><t t-out="line.name"/></td>
-                                        <td class="tr"><t t-out="line.product_qty" t-options='{"widget": "float", "precision": 2}'/></td>
-                                        <td class="tc"><t t-out="line.product_uom_id.name"/></td>
-                                        <td class="tr"><t t-out="line.price_unit" t-options='{"widget": "float", "precision": 2}'/></td>
-                                        <td class="tl noborder-r" style="width: 8%;"><t t-out="o.currency_id.name"/></td>
-                                        <td class="tr noborder-l" style="width: 20%;"><t t-out="line.price_subtotal" t-options='{"widget": "float", "precision": 2}'/></td>
+                                        <td class="tl">
+                                            <t t-out="line.name"/>
+                                        </td>
+                                        <td class="tr">
+                                            <t t-out="line.product_qty"
+                                               t-options='{"widget": "float", "precision": 2}'/>
+                                        </td>
+                                        <td class="tc">
+                                            <t t-out="line.product_uom_id.name"/>
+                                        </td>
+                                        <td class="tr">
+                                            <t t-out="line.price_unit" t-options='{"widget": "float", "precision": 2}'/>
+                                        </td>
+                                        <td class="tl noborder-r" style="width: 8%;">
+                                            <t t-out="o.currency_id.name"/>
+                                        </td>
+                                        <td class="tr noborder-l" style="width: 20%;">
+                                            <t t-out="line.price_subtotal"
+                                               t-options='{"widget": "float", "precision": 2}'/>
+                                        </td>
                                     </tr>
                                 </t>
 
@@ -290,7 +333,9 @@
                                     <td></td>
                                     <td></td>
                                     <td class="tl noborder-r" style="padding-top: 18px;">
-                                        <t t-if="o.amount_tax &gt; 0"><t t-out="o.currency_id.name"/></t>
+                                        <t t-if="o.amount_tax &gt; 0">
+                                            <t t-out="o.currency_id.name"/>
+                                        </t>
                                     </td>
                                     <td class="tr noborder-l" style="padding-top: 18px;">
                                         <t t-if="o.amount_tax &gt; 0">
@@ -312,8 +357,12 @@
                             <tfoot>
                                 <tr>
                                     <th colspan="4" class="tc">Total</th>
-                                    <th class="tl noborder-r" style="width: 8%;"><t t-out="o.currency_id.name"/></th>
-                                    <th class="tr noborder-l" style="width: 20%;"><t t-out="o.amount_total" t-options='{"widget": "float", "precision": 2}'/></th>
+                                    <th class="tl noborder-r" style="width: 8%;">
+                                        <t t-out="o.currency_id.name"/>
+                                    </th>
+                                    <th class="tr noborder-l" style="width: 20%;">
+                                        <t t-out="o.amount_total" t-options='{"widget": "float", "precision": 2}'/>
+                                    </th>
                                 </tr>
                             </tfoot>
                         </table>
@@ -322,10 +371,14 @@
                         <div class="kpo-notes">
                             <b>Note:</b>
                             <ol>
-                                <li>Please ensure the goods are delivered before 4:00 PM on the scheduled delivery date.</li>
+                                <li>Please ensure the goods are delivered before 4:00 PM on the scheduled delivery
+                                    date.
+                                </li>
                                 <li>Kindly arrange and send unloading labour along with the delivery.</li>
                                 <li>Any damage or discrepancy must be reported immediately upon delivery</li>
-                                <li>Please send the Delivery Challan, Halal Certificate, and Certificate of Analysis (COA) along with the delivery.<br/>
+                                <li>Please send the Delivery Challan, Halal Certificate, and Certificate of Analysis
+                                    (COA) along with the delivery.
+                                    <br/>
                                     without these documents, we will not be able to proceed with the order
                                 </li>
                             </ol>
@@ -333,7 +386,8 @@
 
                         <!-- ===== FOOTER LEGAL DISCLAIMER ===== -->
                         <div class="kpo-footer">
-                            KalSal runs on in-house ERP, Business Broadcast (R) BB. The document does not require sinagture. "'KalSal-CELAKT-Montu-Baymisl-Roots" brands are owned by KalSal
+                            KalSal runs on in-house ERP, Business Broadcast (R) BB. The document does not require
+                            sinagture. "'KalSal-CELAKT-Montu-Baymisl-Roots" brands are owned by KalSal
                         </div>
 
                     </div>

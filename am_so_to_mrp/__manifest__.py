@@ -22,10 +22,10 @@ Long description of module's purpose
 
     # always loaded
     'data': [
+        'reports/purchase_order_report.xml',
         'security/ir.model.access.csv',
         'security/security.xml',
         'views/purchase_requisition_views.xml',
-        # 'reports/purchase_order_report.xml',
         'data/ir_sequence_data.xml',
         'views/custom_budget_view.xml',
         'views/sales_order.xml',

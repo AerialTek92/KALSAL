@@ -108,7 +108,8 @@
                                     <!-- FIX: Dynamic domain evaluated as a Python expression -->
                                     <field name="product_id"
                                            decoration-danger="is_po_cancelled" width="auto"
-                                           domain="restrict_products and [('id', 'in', allowed_product_ids)] or []" readonly="product_id"/>
+                                           domain="restrict_products and [('id', 'in', allowed_product_ids)] or []"
+                                           readonly="product_id"/>
 
                                     <!--                                    <field name="finished_good_id" widget="many2many_tags"/>-->
                                     <field name="quantity_required" decoration-danger="is_po_cancelled" width="auto"/>
@@ -161,7 +162,18 @@
         <field name="inherit_id" ref="purchase.purchase_order_form"/>
         <field name="arch" type="xml">
 
+            <xpath expr="//header" position="inside">
+                <!-- The name attribute points to your custom report action ID -->
+                <button name="%(am_so_to_mrp.action_report_purchase_order_kalsal)d"
+                        string="Print PO"
+                        type="action"
+                        class="btn-primary"/>
+            </xpath>
+
             <!-- State-transition buttons: draft -> locked -> (finance releases) -> draft -> purchase -->
+            <xpath expr="//header/button[@name='550']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
             <xpath expr="//header/button[@name='button_confirm'][1]" position="attributes">
                 <attribute name="invisible">state != 'sent' or payment_term_id == False</attribute>
                 <attribute name="groups">fk_kalsal_security.group_executor_procurement</attribute>
